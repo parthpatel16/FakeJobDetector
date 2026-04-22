@@ -28,39 +28,113 @@ CORS(app)  # Enable CORS for React frontend
 # Point to Tesseract executable for OCR on Windows
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# --- Gemini AI Setup ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# --- Gemini AI Setup (Multi-Key + Multi-Model Pool) ---
+import time as _time
+
 gemini_model = None
 gemini_model_name = None
+gemini_models_pool = []  # All available key+model combos for rate-limit fallback
 
-if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_API_KEY_HERE":
-    genai.configure(api_key=GEMINI_API_KEY)
-    print(f"[INFO] API key loaded ({GEMINI_API_KEY[:10]}...)")
+# Collect all API keys: GEMINI_API_KEYS (comma-separated) takes priority, 
+# falls back to single GEMINI_API_KEY
+_raw_keys = os.getenv("GEMINI_API_KEYS", "")
+_single_key = os.getenv("GEMINI_API_KEY", "")
+
+api_keys = []
+if _raw_keys:
+    api_keys = [k.strip() for k in _raw_keys.split(",") if k.strip() and k.strip() != "YOUR_API_KEY_HERE"]
+if not api_keys and _single_key and _single_key != "YOUR_API_KEY_HERE":
+    api_keys = [_single_key]
+
+if api_keys:
+    print(f"[INFO] {len(api_keys)} API key(s) loaded")
     
-    # Models in order of preference (correct names from API)
+    # Models in order of preference
     model_candidates = [
+        "gemini-2.0-flash",
         "gemini-2.5-flash",
-        "gemini-2.0-flash",  
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash-latest",
         "gemini-1.5-flash",
+        "gemini-1.5-pro-latest",
     ]
     
-    for name in model_candidates:
+    # Register all key × model combinations
+    # Each API key has its own independent quota, so this multiplies available requests
+    for key_index, api_key in enumerate(api_keys):
+        key_label = f"Key{key_index + 1}({api_key[:8]}...)"
         try:
-            test_model = genai.GenerativeModel(name)
-            # Verify it actually works with a quick call
-            test_model.generate_content("Hi", generation_config={"max_output_tokens": 5})
-            gemini_model = test_model
-            gemini_model_name = name
-            print(f"[INFO] Gemini AI verified and ready: {name}")
-            break
+            genai.configure(api_key=api_key)
+            for name in model_candidates:
+                try:
+                    model_obj = genai.GenerativeModel(name)
+                    gemini_models_pool.append({
+                        "name": name,
+                        "model": model_obj,
+                        "api_key": api_key,
+                        "key_label": key_label
+                    })
+                except Exception as e:
+                    pass  # silently skip unavailable models
+            print(f"[INFO] {key_label}: models registered")
         except Exception as e:
-            print(f"[WARN] Model '{name}' failed: {e}")
-            continue
+            print(f"[WARN] {key_label}: configuration failed — {e}")
     
-    if not gemini_model:
-        print("[ERROR] All Gemini models failed. Chatbot disabled.")
+    if gemini_models_pool:
+        # Configure with the first key as default
+        genai.configure(api_key=gemini_models_pool[0]["api_key"])
+        gemini_model = gemini_models_pool[0]["model"]
+        gemini_model_name = gemini_models_pool[0]["name"]
+        total_models = len(gemini_models_pool)
+        print(f"[INFO] Primary: {gemini_model_name} | {total_models} model(s) across {len(api_keys)} key(s)")
+    else:
+        print("[ERROR] All Gemini models failed across all keys. AI features disabled.")
 else:
-    print("[WARN] GEMINI_API_KEY not set. Chatbot will be disabled.")
+    print("[WARN] No GEMINI_API_KEYS or GEMINI_API_KEY set. AI features disabled.")
+
+
+# Track which API key is currently configured to avoid unnecessary reconfiguration
+_current_api_key = gemini_models_pool[0]["api_key"] if gemini_models_pool else None
+
+def safe_generate(prompt, generation_config=None, max_retries=2):
+    """Generates content using Gemini with automatic key + model fallback on rate limits.
+    Cycles through all API key × model combinations when quota is exceeded."""
+    global _current_api_key
+    
+    if not gemini_models_pool:
+        return None
+    
+    last_error = None
+    for model_info in gemini_models_pool:
+        # Switch API key if needed (each key has independent quota)
+        if model_info["api_key"] != _current_api_key:
+            genai.configure(api_key=model_info["api_key"])
+            _current_api_key = model_info["api_key"]
+        
+        for attempt in range(max_retries):
+            try:
+                response = model_info["model"].generate_content(
+                    prompt,
+                    generation_config=generation_config or {}
+                )
+                return response
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                if "429" in error_str or "ResourceExhausted" in error_str or "quota" in error_str.lower():
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt
+                        print(f"[WARN] Rate limited on {model_info['key_label']}:{model_info['name']}, retry in {wait_time}s...")
+                        _time.sleep(wait_time)
+                    else:
+                        print(f"[WARN] {model_info['key_label']}:{model_info['name']} exhausted, trying next...")
+                        break
+                else:
+                    print(f"[ERROR] Gemini error ({model_info['key_label']}:{model_info['name']}): {e}")
+                    break
+    
+    print(f"[ERROR] All keys & models exhausted. Last error: {last_error}")
+    return None
 
 # --- Load Model and Vectorizer ---
 try:
@@ -139,7 +213,7 @@ def extract_company_name_with_gemini(text):
     # Always get the regex result as baseline
     regex_name = extract_company_name(text)
     
-    if not gemini_model:
+    if not gemini_models_pool:
         return regex_name
     
     try:
@@ -154,18 +228,15 @@ Instructions:
 
 Text:
 \"\"\"
-{text[:1500]}
+{text[:40000]}
 \"\"\"
 
 Company name:"""
         
-        response = gemini_model.generate_content(
-            prompt,
-            generation_config={"max_output_tokens": 50, "temperature": 0.0}
-        )
+        response = safe_generate(prompt, generation_config={"max_output_tokens": 50, "temperature": 0.0})
         
-        # Handle safety filter blocks
-        if not response.candidates or not response.candidates[0].content.parts:
+        # Handle empty/failed response
+        if not response or not response.candidates or not response.candidates[0].content.parts:
             print("[WARN] Gemini returned empty response for company name, using regex fallback")
             return regex_name
         
@@ -208,7 +279,7 @@ def check_website_status(url):
 
 def verify_company_with_gemini(company_name, job_text):
     """Generates a comprehensive company due-diligence report using Gemini AI."""
-    if not gemini_model or not company_name:
+    if not gemini_models_pool or not company_name:
         return None
     
     # Check for website URLs in the text
@@ -222,7 +293,7 @@ def verify_company_with_gemini(company_name, job_text):
 
 Job posting text for context:
 ---
-{job_text[:2000]}
+{job_text[:40000]}
 ---
 
 You MUST respond in valid JSON format only. No markdown, no extra text. Use this exact structure:
@@ -268,14 +339,14 @@ IMPORTANT RULES:
 4. Include at least 5 factors in trust_breakdown covering: Website, Physical Address, Owner Transparency, Employee Presence, Social Proof, Business Consistency, Registration Proof.
 5. The response MUST be valid JSON."""
         
-        response = gemini_model.generate_content(
-            prompt,
-            generation_config={
+        response = safe_generate(prompt, generation_config={
                 "max_output_tokens": 4000, 
                 "temperature": 0.3,
                 "response_mime_type": "application/json"
-            }
-        )
+            })
+        
+        if not response:
+            raise Exception("All Gemini models exhausted (rate limited)")
         
         # Parse the JSON response with robust extraction
         response_text = response.text.strip()
@@ -337,6 +408,9 @@ IMPORTANT RULES:
 
 def extract_job_details(text):
     """Extracts structured job details from raw text using regex heuristics."""
+    # Clean markdown links and raw URLs to prevent regex garble
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    text = re.sub(r'https?://\S+', '', text)
     low = text.lower()
     details = {}
     
@@ -423,12 +497,186 @@ def extract_job_details(text):
     if skills_section:
         raw_skills = skills_section.group(1)
         # Extract bullet points or comma-separated items
-        skill_items = re.findall(r"[-•*]\s*(.+?)(?:\n|$)", raw_skills)
+        skill_items = re.findall(r"[-\u2022*]\s*(.+?)(?:\n|$)", raw_skills)
         if not skill_items:
             skill_items = [s.strip() for s in raw_skills.split(",") if s.strip()]
         details["skills"] = [s.strip()[:80] for s in skill_items[:8]]
     
     return details
+
+
+def extract_job_details_with_gemini(text):
+    """Uses Gemini AI to extract structured job details accurately from raw text.
+    Falls back to regex extraction if Gemini is unavailable."""
+    regex_details = extract_job_details(text)
+    
+    if not gemini_models_pool:
+        return regex_details
+    
+    try:
+        prompt = f"""You are a data extraction tool. From the following job posting text, extract all structured job details.
+
+Instructions:
+- Return ONLY valid JSON, no markdown, no extra text.
+- Extract details ONLY if they are clearly mentioned in the text. Do NOT guess or hallucinate.
+- If a field is not found or says "not disclosed", DO NOT omit it. Set it to "Not Disclosed" or "Not Specified".
+- Ensure values are clean text, NOT markdown links or URLs.
+- For skills, extract individual skill items as a list of short strings. If none found, return an empty array [].
+
+Text:
+\"\"\"
+{text[:40000]}
+\"\"\"
+
+Return JSON with exactly these fields:
+{{
+  "title": "Job title/position",
+  "location": "Job location",
+  "salary": "Salary/CTC/compensation (e.g. 'Not Disclosed' or the amount)",
+  "employment_type": "Full Time / Part Time / Contract / Freelance / Internship / Remote",
+  "experience": "Experience required",
+  "contact": "Phone, email, or website for contact (or 'Not Specified')",
+  "skills": ["skill1", "skill2", ...]
+}}"""
+        
+        response = safe_generate(prompt, generation_config={
+                "max_output_tokens": 1000,
+                "temperature": 0.1,
+                "response_mime_type": "application/json"
+            })
+        
+        if not response:
+            print("[WARN] All Gemini models exhausted for job details, using regex fallback")
+            return regex_details
+        
+        response_text = response.text.strip()
+        gemini_details = None
+        
+        try:
+            gemini_details = json.loads(response_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    gemini_details = json.loads(json_match.group(1).strip())
+                except json.JSONDecodeError:
+                    pass
+            if gemini_details is None:
+                first_brace = response_text.find('{')
+                last_brace = response_text.rfind('}')
+                if first_brace != -1 and last_brace > first_brace:
+                    try:
+                        gemini_details = json.loads(response_text[first_brace:last_brace + 1])
+                    except json.JSONDecodeError:
+                        pass
+        
+        if gemini_details:
+            # Merge: prefer Gemini results but keep regex as fallback for missing fields
+            merged = {}
+            for key in ["title", "location", "salary", "employment_type", "experience", "contact", "skills"]:
+                gemini_val = gemini_details.get(key)
+                regex_val = regex_details.get(key)
+                if gemini_val is not None:
+                    if isinstance(gemini_val, list):
+                        merged[key] = gemini_val if len(gemini_val) > 0 else (regex_val or [])
+                    elif isinstance(gemini_val, str) and gemini_val.strip() and gemini_val.strip().lower() not in ["none", "n/a", "unknown"]:
+                        merged[key] = gemini_val.strip()
+                    else:
+                        merged[key] = regex_val
+                else:
+                    merged[key] = regex_val
+            print(f"[INFO] Gemini job details extracted: {list(merged.keys())}")
+            return merged
+        else:
+            print("[WARN] Gemini job details parsing failed, using regex fallback")
+            return regex_details
+    except Exception as e:
+        print(f"[WARN] Gemini job detail extraction failed: {e}")
+        return regex_details
+
+
+def generate_detailed_summary_with_gemini(text, prediction, confidence, highlights, red_flags):
+    """Uses Gemini AI to generate a comprehensive detailed summary and analysis.
+    Falls back to template-based summary if Gemini is unavailable."""
+    is_fake = prediction == 1
+    fallback = get_detailed_analysis(text, prediction, confidence)
+    
+    if not gemini_models_pool:
+        return fallback
+    
+    try:
+        prompt = f"""You are an expert job fraud analyst. Analyze the following job posting and provide a comprehensive report.
+
+Job Posting Text:
+\"\"\"
+{text[:40000]}
+\"\"\"
+
+ML Model Prediction: {"FRAUDULENT" if is_fake else "LEGITIMATE"} (Confidence: {confidence * 100:.1f}%)
+Top Linguistic Markers: {', '.join(highlights[:5]) if highlights else 'None identified'}
+
+You MUST respond in valid JSON format only. Use this exact structure:
+{{
+  "summary": "A detailed 3-5 sentence analysis of this job posting. Explain WHY it appears to be {'fraudulent' if is_fake else 'legitimate'}. Reference specific phrases, patterns, or red flags from the actual text. Be specific and insightful, not generic.",
+  "red_flags": ["Specific red flag 1 from the text", "Specific red flag 2", ...],
+  "company_insight": "A specific insight about the company/employer based on the posting content. Reference actual details from the text.",
+  "recommendation": "Clear, actionable recommendation for the job seeker based on this specific posting."
+}}
+
+IMPORTANT:
+- Be SPECIFIC. Reference actual content from the job posting, not generic statements.
+- If the posting is fake, identify the exact manipulative tactics used.
+- If legitimate, highlight what makes it trustworthy.
+- Keep red_flags as an empty array [] if the posting appears legitimate.
+- The summary should read like a professional analyst's report."""
+        
+        response = safe_generate(prompt, generation_config={
+                "max_output_tokens": 1500,
+                "temperature": 0.3,
+                "response_mime_type": "application/json"
+            })
+        
+        if not response:
+            print("[WARN] All Gemini models exhausted for summary, using template fallback")
+            return fallback
+        
+        response_text = response.text.strip()
+        gemini_analysis = None
+        
+        try:
+            gemini_analysis = json.loads(response_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    gemini_analysis = json.loads(json_match.group(1).strip())
+                except json.JSONDecodeError:
+                    pass
+            if gemini_analysis is None:
+                first_brace = response_text.find('{')
+                last_brace = response_text.rfind('}')
+                if first_brace != -1 and last_brace > first_brace:
+                    try:
+                        gemini_analysis = json.loads(response_text[first_brace:last_brace + 1])
+                    except json.JSONDecodeError:
+                        pass
+        
+        if gemini_analysis:
+            result = {
+                "summary": gemini_analysis.get("summary", fallback["summary"]),
+                "red_flags": gemini_analysis.get("red_flags", fallback["red_flags"]),
+                "company_insight": gemini_analysis.get("company_insight", fallback["company_insight"]),
+                "recommendation": gemini_analysis.get("recommendation", fallback["recommendation"]),
+                "source": "gemini"
+            }
+            print(f"[INFO] Gemini detailed summary generated successfully")
+            return result
+        else:
+            print("[WARN] Gemini summary parsing failed, using template fallback")
+            return fallback
+    except Exception as e:
+        print(f"[WARN] Gemini detailed summary generation failed: {e}")
+        return fallback
 
 def get_analysis_pipeline(text, cleaned_text, prediction, confidence, highlights, red_flags):
     """Documents every check performed during the analysis for transparency."""
@@ -480,7 +728,7 @@ def get_analysis_pipeline(text, cleaned_text, prediction, confidence, highlights
     else:
         checks_passed.append("No early ID/financial data requests")
     
-    scam_check = any(w in low for w in ["daily pay", "earn fast", "no interview", "immediate join", "no experience"])
+    scam_check = any(w in low for w in ["daily pay", "earn fast", "no interview", "immediate join", "no experience", "earn daily", "hit like", "comment interested", "no investment"])
     if scam_check:
         checks_failed.append("'Too good to be true' language detected")
     else:
@@ -560,7 +808,7 @@ def get_detailed_analysis(text, prediction, confidence):
         red_flags.append("Request for upfront payment or 'security deposits'.")
     if any(word in low_text for word in ["bank account", "aadhaar", "pan card", "cvv", "otp"]):
         red_flags.append("Requests for sensitive personal or financial identification early in the process.")
-    if any(word in low_text for word in ["daily pay", "earn fast", "no interview", "immediate join"]):
+    if any(word in low_text for word in ["daily pay", "earn fast", "no interview", "immediate join", "earn daily", "hit like", "comment interested", "no investment"]):
         red_flags.append("Signs of 'too good to be true' offers or bypassing standard hiring filters.")
     
     summary = ""
@@ -595,12 +843,33 @@ def get_prediction_data(text):
     probs = model.predict_proba(vec)[0]
     confidence = float(max(probs))
 
+    # HEURISTIC OVERRIDE: ML models can fail on short social media strings. 
+    # Hard-flag undeniable scam phrases to safeguard users.
+    low_text = text.lower()
+    override_flags = 0
+    if any(w in low_text for w in ["whatsapp", "telegram", "imo", "messenger"]): override_flags += 1
+    if any(w in low_text for w in ["deposit", "registration fee", "processing fee", "security fee", "refundable", "starter kit"]): override_flags += 2
+    if any(w in low_text for w in ["bank account", "aadhaar", "pan card", "cvv", "otp"]): override_flags += 2
+    if any(w in low_text for w in ["daily pay", "earn fast", "no interview", "earn daily", "hit like", "comment interested", "no investment"]): override_flags += 2
+
+    if override_flags > 0:
+        if prediction == 0:
+            print(f"[SECURITY] Heuristic Engine overrode ML prediction (Fake). Flags: {override_flags}")
+            prediction = 1
+        # Boost confidence for heuristic intercepts minimum 90%
+        if prediction == 1 and confidence < 0.90:
+            confidence = min(0.99, 0.88 + (override_flags * 0.02))
+
     highlights = get_highlights(text)
-    analysis = get_detailed_analysis(text, prediction, confidence)
+    
+    # Use Gemini for detailed summary (falls back to template if unavailable)
+    analysis = generate_detailed_summary_with_gemini(text, prediction, confidence, highlights, [])
     
     # Extract company name (use Gemini if available, else fallback to regex)
     company_name = extract_company_name_with_gemini(text)
-    job_details = extract_job_details(text)
+    
+    # Extract job details (use Gemini if available, else fallback to regex)
+    job_details = extract_job_details_with_gemini(text)
     
     # Build analysis pipeline
     pipeline = get_analysis_pipeline(
@@ -660,28 +929,69 @@ def predict_url():
     if not data or "url" not in data:
         return jsonify({"error": "No URL provided"}), 400
     
+    url = data["url"].strip()
+    if not url.startswith("http"):
+        url = "https://" + url
+    
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(data["url"], headers=headers, timeout=10)
-        resp.raise_for_status()
-        
-        soup = BeautifulSoup(resp.content, "html.parser")
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        # Get text and clean up whitespace
-        text = soup.get_text(separator=" ")
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = " ".join(chunk for chunk in chunks if chunk)
-        
+        text = ""
+        # 1. Primary Strategy: Use Jina AI Reader API to bypass bot-blocks/JS and extract clean markdown
+        try:
+            jina_url = "https://r.jina.ai/" + url
+            jina_resp = requests.get(jina_url, timeout=20)
+            if jina_resp.status_code == 200:
+                text = jina_resp.text
+                print("[INFO] Successfully extracted page content using Jina AI")
+        except Exception as e:
+            print(f"[WARN] Jina AI extraction failed, falling back to basic requests: {e}")
+            
+        # 2. Fallback Strategy: Standard HTML scraping if Jina fails or returned empty
         if not text.strip():
-            return jsonify({"error": "Could not extract text from the webpage."}), 400
+            print("[INFO] Using fallback BeautifulSoup scraper")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Connection": "keep-alive",
+            }
+            
+            session = requests.Session()
+            resp = session.get(url, headers=headers, timeout=15, allow_redirects=True)
+            resp.raise_for_status()
+            
+            soup = BeautifulSoup(resp.content, "html.parser")
+            
+            for tag in soup(["script", "style", "noscript", "iframe"]):
+                tag.decompose()
+            
+            if soup.body:
+                text = soup.body.get_text(separator="\n")
+            else:
+                text = soup.get_text(separator="\n")
+            
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            text = "\n".join(lines)
+        
+        # Truncate very long pages to useful content
+        if len(text) > 50000:
+            text = text[:50000]
+        
+        if not text.strip() or len(text.strip()) < 20:
+            return jsonify({"error": "Could not extract meaningful text from the webpage. The site may require JavaScript or block automated access."}), 400
             
         result = get_prediction_data(text)
+        result["source_url"] = url
         return jsonify(result)
+    except requests.exceptions.SSLError:
+        return jsonify({"error": "SSL certificate error. The website's security certificate could not be verified."}), 400
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "Could not connect to the website. Please check the URL and try again."}), 400
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "The website took too long to respond. Please try again later."}), 400
+    except requests.exceptions.HTTPError as e:
+        return jsonify({"error": f"Website returned an error: {e.response.status_code}. The page may require login or doesn't exist."}), 400
     except Exception as e:
+        print(f"[ERROR] URL scraping failed: {traceback.format_exc()}")
         return jsonify({"error": f"Web scraping failed: {str(e)}"}), 500
 
 # --- Company Verification Endpoint ---
@@ -710,7 +1020,7 @@ def company_verify():
             }
         })
     
-    if not gemini_model:
+    if not gemini_models_pool:
         return jsonify({
             "company_info": {
                 "name": company_name,
@@ -741,13 +1051,16 @@ FORMATTING RULES:
 - When giving a roadmap, structure it as a clear timeline with specific resources.
 - Always be encouraging but honest about skill gaps.
 - If the job was flagged as FAKE, strongly advise against applying and explain why.
+- IMPORTANT: At the very end of your response, you MUST provide 3 short, relevant follow-up questions the user might ask next. Format them exactly like this at the very bottom:
+---SUGGESTIONS---
+["question 1", "question 2", "question 3"]
 
 CONTEXT: You have access to the analyzed job posting details below. Use this context to give personalized advice.
 """
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    if not gemini_model:
+    if not gemini_models_pool:
         return jsonify({"error": "AI Chatbot is not configured. Please set GEMINI_API_KEY in .env file."}), 503
     
     data = request.get_json()
@@ -795,8 +1108,25 @@ Red Flags Found: {', '.join(job_context.get('analysis', {}).get('red_flags', [])
         
         response = chat.send_message(full_message)
         
+        response_text = response.text
+        suggestions = []
+        if "---SUGGESTIONS---" in response_text:
+            parts = response_text.split("---SUGGESTIONS---")
+            reply = parts[0].strip()
+            try:
+                suggestions_text = parts[1].strip()
+                if suggestions_text.startswith("```json"): suggestions_text = suggestions_text[7:]
+                elif suggestions_text.startswith("```"): suggestions_text = suggestions_text[3:]
+                if suggestions_text.endswith("```"): suggestions_text = suggestions_text[:-3]
+                suggestions = json.loads(suggestions_text.strip())
+            except Exception as e:
+                print(f"[WARN] Failed to parse follow-up questions: {e}")
+        else:
+            reply = response_text
+        
         return jsonify({
-            "reply": response.text,
+            "reply": reply,
+            "suggestions": suggestions,
             "status": "ok"
         })
     except Exception as e:
@@ -806,8 +1136,8 @@ Red Flags Found: {', '.join(job_context.get('analysis', {}).get('red_flags', [])
 def chat_status():
     """Check if the chatbot is available."""
     return jsonify({
-        "available": gemini_model is not None,
-        "model": gemini_model_name if gemini_model else None
+        "available": len(gemini_models_pool) > 0,
+        "model": gemini_model_name if gemini_models_pool else None
     })
 
 if __name__ == "__main__":

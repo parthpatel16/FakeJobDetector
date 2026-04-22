@@ -158,17 +158,18 @@ function App() {
     }
   };
 
-  const handleChatSend = async () => {
-    if (!chatInput.trim() || chatLoading) return;
+  const handleChatSend = async (forcedMsg = null) => {
+    const userMsg = typeof forcedMsg === 'string' ? forcedMsg.trim() : chatInput.trim();
+    if (!userMsg || chatLoading) return;
     
-    const userMsg = chatInput.trim();
-    setChatInput('');
+    if (typeof forcedMsg !== 'string') setChatInput('');
     setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setChatLoading(true);
 
     try {
-      // Build history for the API (exclude the welcome message from Gemini history to keep it clean)
+      // Build history for the API (exclude the welcome message from Gemini history to prevent role alternance error)
       const historyForApi = chatMessages
+        .filter((_, i) => i !== 0) // Skip first welcome assistant message
         .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', content: m.content }));
 
       const response = await fetch("http://127.0.0.1:5000/chat", {
@@ -184,7 +185,7 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Chat failed');
       
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply, suggestions: data.suggestions }]);
     } catch (err) {
       setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
     } finally {
@@ -200,30 +201,7 @@ function App() {
   };
 
   const handleSuggestionClick = (text) => {
-    setChatInput(text);
-    setTimeout(() => handleChatSend(), 50);
-    // Actually need to send the text directly
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: text }]);
-    setChatLoading(true);
-
-    fetch("http://127.0.0.1:5000/chat", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        job_context: result || null,
-        history: chatMessages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', content: m.content })),
-      }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply || data.error }]);
-      })
-      .catch(err => {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
-      })
-      .finally(() => setChatLoading(false));
+    handleChatSend(text);
   };
 
   const handleTryExample = (type = 'generic') => {
@@ -380,7 +358,7 @@ function App() {
     "What skills do I need?",
     "Help me prepare for the interview",
   ] : [
-    "How does VerifyJob.ai work?",
+    "How does FakeJobDetector work?",
     "What are common job scam signs?",
     "Tips for safe job searching",
   ];
@@ -395,10 +373,10 @@ function App() {
               onClick={() => setActiveView('home')}
               className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white font-headline cursor-pointer hover:scale-105 transition-transform"
             >
-              VerifyJob<span className="text-primary">.ai</span>
+              FakeJob<span className="text-primary">Detector</span>
             </span>
             <div className="hidden md:flex gap-8 items-center">
-              {['home', 'about', 'documentation'].map((view) => (
+              {['home', 'about'].map((view) => (
                 <button
                   key={view}
                   onClick={() => setActiveView(view)}
@@ -627,251 +605,262 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Main Grid */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Left Column */}
-                    <div className="lg:col-span-4 space-y-8">
-                      {/* Image Preview */}
-                      {(result.image_preview || imagePreviewLocal) && activeTab === 'image' && (
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                          <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary">photo_camera</span>Uploaded Image
-                          </h3>
-                          <img src={result.image_preview || imagePreviewLocal} alt="Scanned document" className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md object-contain max-h-72" />
-                          <p className="text-[10px] uppercase tracking-widest text-center mt-3 text-on-surface-variant dark:text-slate-500 font-black">OCR Processed via Tesseract v5</p>
-                        </motion.div>
+                  {/* ===== MAIN CENTER CARDS: Company & Job Details ===== */}
+                  <div className="flex flex-col gap-8 max-w-5xl mx-auto">
+                    {/* Image Preview (if applicable) */}
+                    {(result.image_preview || imagePreviewLocal) && activeTab === 'image' && (
+                      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
+                        <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary">photo_camera</span>Uploaded Image
+                        </h3>
+                        <img src={result.image_preview || imagePreviewLocal} alt="Scanned document" className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md object-contain max-h-72" />
+                        <p className="text-[10px] uppercase tracking-widest text-center mt-3 text-on-surface-variant dark:text-slate-500 font-black">OCR Processed via Tesseract v5</p>
+                      </motion.div>
+                    )}
+
+                    {/* Company Due Diligence Card — CENTER/MAIN */}
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-primary/10 to-transparent rounded-bl-full"></div>
+                      <h3 className="text-xl font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-2xl">verified_user</span>Company Verification
+                      </h3>
+
+                      {/* Loading State */}
+                      {companyLoading && (
+                        <div className="space-y-4 animate-pulse">
+                          <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-slate-700"></div>
+                            <div className="flex-1 space-y-2">
+                              <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-lg w-3/4"></div>
+                              <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-lg w-1/2"></div>
+                            </div>
+                          </div>
+                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
+                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
+                          <p className="text-[10px] text-primary font-bold uppercase tracking-widest text-center mt-4 animate-pulse">🔍 Running AI due-diligence check...</p>
+                        </div>
                       )}
 
-                      {/* Company Due Diligence Card */}
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/10 to-transparent rounded-bl-full"></div>
-                        <h3 className="text-lg font-black text-on-surface dark:text-white mb-5 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary">verified_user</span>Company Verification
-                        </h3>
-
-                        {/* Loading State */}
-                        {companyLoading && (
-                          <div className="space-y-4 animate-pulse">
+                      {/* Company Report */}
+                      {!companyLoading && companyReport && (
+                        <div className="space-y-5">
+                          {/* Header: Name + Trust Score */}
+                          <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
-                              <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-slate-700"></div>
-                              <div className="flex-1 space-y-2">
-                                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-lg w-3/4"></div>
-                                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-lg w-1/2"></div>
+                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${companyReport.trust_score !== null && companyReport.trust_score !== undefined ? getTrustColor(companyReport.trust_score).bg + '/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                <span className={`text-2xl font-black ${companyReport.trust_score !== null && companyReport.trust_score !== undefined ? getTrustColor(companyReport.trust_score).text : 'text-slate-400'}`}>
+                                  {companyReport.name && companyReport.name !== 'Unknown' ? companyReport.name.charAt(0).toUpperCase() : '?'}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-lg font-black text-on-surface dark:text-white tracking-tight">{companyReport.name || 'Unknown'}</p>
+                                {companyReport.industry && companyReport.industry !== 'Unknown' && (
+                                  <p className="text-[10px] font-bold text-on-surface-variant dark:text-slate-400 uppercase tracking-widest">{companyReport.industry}</p>
+                                )}
                               </div>
                             </div>
-                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
-                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
-                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
-                            <p className="text-[10px] text-primary font-bold uppercase tracking-widest text-center mt-4 animate-pulse">🔍 Running AI due-diligence check...</p>
-                          </div>
-                        )}
-
-                        {/* Company Report */}
-                        {!companyLoading && companyReport && (
-                          <div className="space-y-5">
-                            {/* Header: Name + Trust Score */}
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${companyReport.trust_score !== null && companyReport.trust_score !== undefined ? getTrustColor(companyReport.trust_score).bg + '/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                                  <span className={`text-2xl font-black ${companyReport.trust_score !== null && companyReport.trust_score !== undefined ? getTrustColor(companyReport.trust_score).text : 'text-slate-400'}`}>
-                                    {companyReport.name && companyReport.name !== 'Unknown' ? companyReport.name.charAt(0).toUpperCase() : '?'}
-                                  </span>
+                            {companyReport.trust_score !== null && companyReport.trust_score !== undefined && (
+                              <div className="text-center">
+                                <div className={`w-16 h-16 rounded-2xl ${getTrustColor(companyReport.trust_score).bg}/10 border-2 ${getTrustColor(companyReport.trust_score).bg === 'bg-green-500' ? 'border-green-500/30' : getTrustColor(companyReport.trust_score).bg === 'bg-amber-500' ? 'border-amber-500/30' : 'border-red-500/30'} flex items-center justify-center`}>
+                                  <span className={`text-xl font-black ${getTrustColor(companyReport.trust_score).text}`}>{companyReport.trust_score}</span>
                                 </div>
-                                <div>
-                                  <p className="text-lg font-black text-on-surface dark:text-white tracking-tight">{companyReport.name || 'Unknown'}</p>
-                                  {companyReport.industry && companyReport.industry !== 'Unknown' && (
-                                    <p className="text-[10px] font-bold text-on-surface-variant dark:text-slate-400 uppercase tracking-widest">{companyReport.industry}</p>
-                                  )}
-                                </div>
+                                <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${getTrustColor(companyReport.trust_score).text}`}>{getTrustColor(companyReport.trust_score).label}</p>
                               </div>
-                              {companyReport.trust_score !== null && companyReport.trust_score !== undefined && (
-                                <div className="text-center">
-                                  <div className={`w-16 h-16 rounded-2xl ${getTrustColor(companyReport.trust_score).bg}/10 border-2 ${getTrustColor(companyReport.trust_score).bg === 'bg-green-500' ? 'border-green-500/30' : getTrustColor(companyReport.trust_score).bg === 'bg-amber-500' ? 'border-amber-500/30' : 'border-red-500/30'} flex items-center justify-center`}>
-                                    <span className={`text-xl font-black ${getTrustColor(companyReport.trust_score).text}`}>{companyReport.trust_score}</span>
-                                  </div>
-                                  <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${getTrustColor(companyReport.trust_score).text}`}>{getTrustColor(companyReport.trust_score).label}</p>
-                                </div>
+                            )}
+                          </div>
+
+                          {/* Quick Info Row */}
+                          {(companyReport.location || companyReport.size || companyReport.founded) && (
+                            <div className="flex flex-wrap gap-2">
+                              {companyReport.location && companyReport.location !== 'Unknown' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">location_on</span>{companyReport.location}</span>
+                              )}
+                              {companyReport.size && companyReport.size !== 'Unknown' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">group</span>{companyReport.size}</span>
+                              )}
+                              {companyReport.founded && companyReport.founded !== 'Unknown' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">calendar_today</span>{companyReport.founded}</span>
+                              )}
+                              {companyReport.registration_type && companyReport.registration_type !== 'Unknown' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">gavel</span>{companyReport.registration_type}</span>
                               )}
                             </div>
+                          )}
 
-                            {/* Quick Info Row */}
-                            {(companyReport.location || companyReport.size || companyReport.founded) && (
-                              <div className="flex flex-wrap gap-2">
-                                {companyReport.location && companyReport.location !== 'Unknown' && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">location_on</span>{companyReport.location}</span>
-                                )}
-                                {companyReport.size && companyReport.size !== 'Unknown' && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">group</span>{companyReport.size}</span>
-                                )}
-                                {companyReport.founded && companyReport.founded !== 'Unknown' && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">calendar_today</span>{companyReport.founded}</span>
-                                )}
-                                {companyReport.registration_type && companyReport.registration_type !== 'Unknown' && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 rounded-lg"><span className="material-symbols-outlined text-xs text-primary">gavel</span>{companyReport.registration_type}</span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Trust Breakdown Table */}
-                            {companyReport.trust_breakdown && companyReport.trust_breakdown.length > 0 && (
-                              <div className="bg-white/30 dark:bg-slate-800/30 rounded-2xl p-4 border border-slate-200/30 dark:border-slate-700/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-3">Trust Breakdown</p>
-                                <div className="space-y-2">
-                                  {companyReport.trust_breakdown.map((item, i) => {
-                                    const statusStyle = getStatusIcon(item.status);
-                                    return (
-                                      <div key={i} className="flex items-center gap-3 py-1">
-                                        <span className={`material-symbols-outlined text-sm ${statusStyle.color}`}>{statusStyle.icon}</span>
-                                        <span className="text-xs font-bold text-on-surface dark:text-white min-w-[120px]">{item.factor}</span>
-                                        <span className="text-xs text-on-surface-variant dark:text-slate-400 flex-1">{item.detail}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Red Flags */}
-                            {companyReport.red_flags && companyReport.red_flags.length > 0 && (
+                          {/* Trust Breakdown Table */}
+                          {companyReport.trust_breakdown && companyReport.trust_breakdown.length > 0 && (
+                            <div className="bg-white/30 dark:bg-slate-800/30 rounded-2xl p-4 border border-slate-200/30 dark:border-slate-700/30">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-3">Trust Breakdown</p>
                               <div className="space-y-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">🚨 Red Flags</p>
-                                {companyReport.red_flags.map((flag, i) => (
-                                  <div key={i} className="flex gap-2 items-start bg-red-500/5 p-2.5 rounded-xl border border-red-500/10">
-                                    <span className="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
-                                    <p className="text-xs font-bold text-red-700 dark:text-red-400">{flag}</p>
-                                  </div>
-                                ))}
+                                {companyReport.trust_breakdown.map((item, i) => {
+                                  const statusStyle = getStatusIcon(item.status);
+                                  return (
+                                    <div key={i} className="flex items-center gap-3 py-1">
+                                      <span className={`material-symbols-outlined text-sm ${statusStyle.color}`}>{statusStyle.icon}</span>
+                                      <span className="text-xs font-bold text-on-surface dark:text-white min-w-[120px]">{item.factor}</span>
+                                      <span className="text-xs text-on-surface-variant dark:text-slate-400 flex-1">{item.detail}</span>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            )}
+                            </div>
+                          )}
 
-                            {/* Positive Signs */}
-                            {companyReport.positive_signs && companyReport.positive_signs.length > 0 && (
-                              <div className="space-y-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-green-500">✅ Positive Signs</p>
-                                {companyReport.positive_signs.map((sign, i) => (
-                                  <div key={i} className="flex gap-2 items-start bg-green-500/5 p-2.5 rounded-xl border border-green-500/10">
-                                    <span className="material-symbols-outlined text-green-500 text-sm mt-0.5">check_circle</span>
-                                    <p className="text-xs font-bold text-green-700 dark:text-green-400">{sign}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Verdict */}
-                            {companyReport.verdict && (
-                              <div className={`p-4 rounded-2xl border ${
-                                companyReport.trust_score >= 70 ? 'bg-green-500/5 border-green-500/20' :
-                                companyReport.trust_score >= 40 ? 'bg-amber-500/5 border-amber-500/20' :
-                                'bg-red-500/5 border-red-500/20'
-                              }`}>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-1">Verdict</p>
-                                <p className="text-sm font-bold text-on-surface dark:text-white">{companyReport.verdict}</p>
-                              </div>
-                            )}
-
-                            {/* Source badge */}
-                            <p className="text-[9px] text-on-surface-variant dark:text-slate-600 uppercase tracking-widest text-right">
-                              {companyReport.source === 'gemini' ? '🤖 AI-Powered Analysis' : companyReport.source === 'none' ? '⚠️ No Company Detected' : companyReport.source === 'error' ? '❌ Verification Failed' : 'ℹ️ Basic Info'}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Fallback when no result yet */}
-                        {!companyLoading && !companyReport && (
-                          <p className="text-sm italic text-on-surface-variant dark:text-slate-500">Company verification will appear after analysis.</p>
-                        )}
-                      </motion.div>
-
-                      {/* Job Details Card */}
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                        <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary">work</span>Extracted Job Details
-                        </h3>
-                        {result.job_details && Object.keys(result.job_details).length > 0 ? (
-                          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {result.job_details.title && <JobDetailRow icon="badge" label="Job Title" value={result.job_details.title} />}
-                            {result.job_details.location && <JobDetailRow icon="location_on" label="Location" value={result.job_details.location} />}
-                            {result.job_details.salary && <JobDetailRow icon="payments" label="Salary / CTC" value={result.job_details.salary} />}
-                            {result.job_details.employment_type && <JobDetailRow icon="schedule" label="Type" value={result.job_details.employment_type} />}
-                            {result.job_details.experience && <JobDetailRow icon="trending_up" label="Experience" value={result.job_details.experience} />}
-                            {result.job_details.contact && <JobDetailRow icon="call" label="Contact" value={result.job_details.contact} />}
-                            {result.job_details.skills && (
-                              <div className="py-3">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-2 flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-primary text-lg">checklist</span>Skills Required
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  {result.job_details.skills.map((skill, i) => (
-                                    <span key={i} className="px-3 py-1 text-[11px] font-bold bg-primary/10 text-primary rounded-lg border border-primary/20">{skill}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm italic text-on-surface-variant dark:text-slate-500">No structured job details could be extracted from the text.</p>
-                        )}
-                      </motion.div>
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="lg:col-span-8 space-y-8">
-                      {/* Summary & Red Flags Row */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                          <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary">article</span>Detailed Summary
-                          </h3>
-                          <p className="text-sm text-on-surface-variant dark:text-slate-300 leading-relaxed">{result.analysis?.summary}</p>
-                          <div className="mt-6 p-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl">
-                            <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Recommendation</h4>
-                            <p className="text-sm dark:text-slate-400 font-bold">{result.analysis?.recommendation}</p>
-                          </div>
-                        </motion.div>
-
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                          <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 uppercase tracking-widest">{result.prediction === 'Fake' ? 'Red Flags' : 'Positive Indicators'}</h3>
-                          <div className="flex flex-col gap-3 mb-6">
-                            {result.analysis?.red_flags && result.analysis.red_flags.length > 0 ? (
-                              result.analysis.red_flags.map((flag, i) => (
-                                <div key={i} className="flex gap-3 items-start bg-red-500/5 p-3 rounded-xl border border-red-500/10">
+                          {/* Red Flags */}
+                          {companyReport.red_flags && companyReport.red_flags.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-red-500">🚨 Red Flags</p>
+                              {companyReport.red_flags.map((flag, i) => (
+                                <div key={i} className="flex gap-2 items-start bg-red-500/5 p-2.5 rounded-xl border border-red-500/10">
                                   <span className="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
                                   <p className="text-xs font-bold text-red-700 dark:text-red-400">{flag}</p>
                                 </div>
-                              ))
-                            ) : (
-                               <p className="text-sm dark:text-slate-400 italic">No suspicious metadata patterns detected.</p>
-                            )}
-                          </div>
-                          <div>
-                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Linguistic Hotspots</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {result.highlights && result.highlights.map((word, i) => (
-                                <span key={i} className="px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter bg-primary/10 text-primary rounded-lg border border-primary/20">{word}</span>
                               ))}
                             </div>
-                          </div>
-                        </motion.div>
-                      </div>
+                          )}
 
-                      {/* Analysis Pipeline */}
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                        <h3 className="text-lg font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary">account_tree</span>How We Analyzed This
-                        </h3>
-                        <p className="text-sm text-on-surface-variant dark:text-slate-400 mb-8 leading-relaxed">Every input goes through a 5-step neural analysis pipeline. Here's exactly what happened with your submission:</p>
-                        <div className="space-y-0">
-                          {result.pipeline && result.pipeline.map((step) => (<PipelineCard key={step.step} step={step} />))}
+                          {/* Positive Signs */}
+                          {companyReport.positive_signs && companyReport.positive_signs.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-green-500">✅ Positive Signs</p>
+                              {companyReport.positive_signs.map((sign, i) => (
+                                <div key={i} className="flex gap-2 items-start bg-green-500/5 p-2.5 rounded-xl border border-green-500/10">
+                                  <span className="material-symbols-outlined text-green-500 text-sm mt-0.5">check_circle</span>
+                                  <p className="text-xs font-bold text-green-700 dark:text-green-400">{sign}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Verdict */}
+                          {companyReport.verdict && (
+                            <div className={`p-4 rounded-2xl border ${
+                              companyReport.trust_score >= 70 ? 'bg-green-500/5 border-green-500/20' :
+                              companyReport.trust_score >= 40 ? 'bg-amber-500/5 border-amber-500/20' :
+                              'bg-red-500/5 border-red-500/20'
+                            }`}>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-1">Verdict</p>
+                              <p className="text-sm font-bold text-on-surface dark:text-white">{companyReport.verdict}</p>
+                            </div>
+                          )}
+
+                          {/* Source badge */}
+                          <p className="text-[9px] text-on-surface-variant dark:text-slate-600 uppercase tracking-widest text-right">
+                            {companyReport.source === 'gemini' ? '🤖 AI-Powered Analysis' : companyReport.source === 'none' ? '⚠️ No Company Detected' : companyReport.source === 'error' ? '❌ Verification Failed' : 'ℹ️ Basic Info'}
+                          </p>
                         </div>
-                      </motion.div>
+                      )}
 
-                      {/* Extracted Text Snippet */}
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                        <p className="text-[10px] font-black text-on-surface-variant dark:text-slate-500 uppercase tracking-[0.3em] mb-3">Raw Snippet Extraction</p>
-                        <p className="text-sm italic text-on-surface-variant dark:text-slate-400 bg-white/30 dark:bg-slate-950/30 p-5 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 leading-relaxed">{result.extracted_text}</p>
-                      </motion.div>
-                    </div>
+                      {/* Fallback when no result yet */}
+                      {!companyLoading && !companyReport && (
+                        <p className="text-sm italic text-on-surface-variant dark:text-slate-500">Company verification will appear after analysis.</p>
+                      )}
+                    </motion.div>
+
+                    {/* Job Details Card — CENTER/MAIN */}
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl border border-slate-200/20 dark:border-slate-800">
+                      <h3 className="text-xl font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-2xl">work</span>Extracted Job Details
+                      </h3>
+                      {result.job_details && Object.keys(result.job_details).length > 0 ? (
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {result.job_details.title && <JobDetailRow icon="badge" label="Job Title" value={result.job_details.title} />}
+                          {result.job_details.location && <JobDetailRow icon="location_on" label="Location" value={result.job_details.location} />}
+                          {result.job_details.salary && <JobDetailRow icon="payments" label="Salary / CTC" value={result.job_details.salary} />}
+                          {result.job_details.employment_type && <JobDetailRow icon="schedule" label="Type" value={result.job_details.employment_type} />}
+                          {result.job_details.experience && <JobDetailRow icon="trending_up" label="Experience" value={result.job_details.experience} />}
+                          {result.job_details.contact && <JobDetailRow icon="call" label="Contact" value={result.job_details.contact} />}
+                          {result.job_details.skills && (
+                            <div className="py-3">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant dark:text-slate-500 mb-2 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary text-lg">checklist</span>Skills Required
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {result.job_details.skills.map((skill, i) => (
+                                  <span key={i} className="px-3 py-1 text-[11px] font-bold bg-primary/10 text-primary rounded-lg border border-primary/20">{skill}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm italic text-on-surface-variant dark:text-slate-500">No structured job details could be extracted from the text.</p>
+                      )}
+                    </motion.div>
                   </div>
+
+                  {/* ===== DETAILED SUMMARY & RED FLAGS ===== */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-black text-on-surface dark:text-white flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary">article</span>Detailed Summary
+                        </h3>
+                        {result.analysis?.source === 'gemini' && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full">
+                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none">
+                              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#gemini-grad)" />
+                              <defs><linearGradient id="gemini-grad" x1="2" y1="2" x2="22" y2="22"><stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/></linearGradient></defs>
+                            </svg>
+                            <span className="text-[9px] font-black uppercase tracking-widest bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Gemini AI</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-on-surface-variant dark:text-slate-300 leading-relaxed">{result.analysis?.summary}</p>
+                      {result.analysis?.company_insight && (
+                        <div className="mt-4 p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10">
+                          <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Company Insight</h4>
+                          <p className="text-sm dark:text-slate-400 font-medium">{result.analysis.company_insight}</p>
+                        </div>
+                      )}
+                      <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl">
+                        <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Recommendation</h4>
+                        <p className="text-sm dark:text-slate-400 font-bold">{result.analysis?.recommendation}</p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
+                      <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 uppercase tracking-widest">{result.prediction === 'Fake' ? 'Red Flags' : 'Positive Indicators'}</h3>
+                      <div className="flex flex-col gap-3 mb-6">
+                        {result.analysis?.red_flags && result.analysis.red_flags.length > 0 ? (
+                          result.analysis.red_flags.map((flag, i) => (
+                            <div key={i} className="flex gap-3 items-start bg-red-500/5 p-3 rounded-xl border border-red-500/10">
+                              <span className="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
+                              <p className="text-xs font-bold text-red-700 dark:text-red-400">{flag}</p>
+                            </div>
+                          ))
+                        ) : (
+                           <p className="text-sm dark:text-slate-400 italic">No suspicious metadata patterns detected.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Linguistic Hotspots</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {result.highlights && result.highlights.map((word, i) => (
+                            <span key={i} className="px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter bg-primary/10 text-primary rounded-lg border border-primary/20">{word}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  {/* ===== EXTRACTED TEXT ===== */}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
+                    <p className="text-[10px] font-black text-on-surface-variant dark:text-slate-500 uppercase tracking-[0.3em] mb-3">Raw Snippet Extraction</p>
+                    <p className="text-sm italic text-on-surface-variant dark:text-slate-400 bg-white/30 dark:bg-slate-950/30 p-5 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 leading-relaxed">{result.extracted_text}</p>
+                  </motion.div>
+
+                  {/* ===== ANALYSIS PIPELINE — AT THE BOTTOM ===== */}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
+                    <h3 className="text-lg font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">account_tree</span>How We Analyzed This
+                    </h3>
+                    <p className="text-sm text-on-surface-variant dark:text-slate-400 mb-8 leading-relaxed">Every input goes through a 5-step neural analysis pipeline. Here's exactly what happened with your submission:</p>
+                    <div className="space-y-0">
+                      {result.pipeline && result.pipeline.map((step) => (<PipelineCard key={step.step} step={step} />))}
+                    </div>
+                  </motion.div>
                 </motion.section>
               )}
             </AnimatePresence>
@@ -888,7 +877,7 @@ function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-16">
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">psychology</span>The AI Engine</h3>
-                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">VerifyJob.ai uses a sophisticated Random Forest ensemble model trained on over 18,000 real and fraudulent job postings. It doesn't just look for words; it analyzes structural patterns, urgency levels, and data request triggers.</p>
+                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">FakeJobDetector uses a sophisticated Random Forest ensemble model trained on over 18,000 real and fraudulent job postings. It doesn't just look for words; it analyzes structural patterns, urgency levels, and data request triggers.</p>
                    </div>
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">verified</span>Our Mission</h3>
@@ -907,50 +896,7 @@ function App() {
           </section>
         )}
 
-        {activeView === 'documentation' && (
-          <section className="max-w-5xl mx-auto px-6 mb-24">
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
-                <div className="text-center">
-                  <h2 className="text-4xl font-black tracking-tighter dark:text-white mb-6">Documentation</h2>
-                  <p className="text-xl text-on-surface-variant dark:text-slate-400">Everything you need to know about the system.</p>
-                </div>
-                <div className="space-y-6">
-                   <div className="collapse bg-surface-container-low dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-                      <div className="p-8">
-                         <h3 className="text-xl font-black dark:text-white mb-4 italic underline decoration-primary decoration-4 underline-offset-8">1. How to use</h3>
-                         <ul className="list-disc list-inside space-y-2 text-on-surface-variant dark:text-slate-400 font-medium">
-                            <li><strong>Text Mode:</strong> Paste the full job description into the analyzer.</li>
-                            <li><strong>Image Mode:</strong> Upload a screenshot from LinkedIn, Naukri, or any portal.</li>
-                            <li><strong>URL Mode:</strong> Paste the direct link (Beta).</li>
-                            <li><strong>AI Chat:</strong> After analysis, click "Ask AI" to chat with the career assistant.</li>
-                         </ul>
-                      </div>
-                   </div>
-                   <div className="collapse bg-surface-container-low dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-                      <div className="p-8">
-                         <h3 className="text-xl font-black dark:text-white mb-4 italic underline decoration-primary decoration-4 underline-offset-8">2. AI Career Assistant</h3>
-                         <ul className="list-disc list-inside space-y-2 text-on-surface-variant dark:text-slate-400 font-medium">
-                            <li><strong>Eligibility Check:</strong> Tell the chatbot your skills, and it will compare them to the job requirements.</li>
-                            <li><strong>Skill Roadmap:</strong> Get a personalized, week-by-week learning plan for missing skills.</li>
-                            <li><strong>Interview Prep:</strong> Ask for common questions, tips, and strategies for the role.</li>
-                            <li><strong>Career Advice:</strong> Resume tips, salary negotiation, and career transition guidance.</li>
-                         </ul>
-                      </div>
-                   </div>
-                   <div className="collapse bg-surface-container-low dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-                      <div className="p-8">
-                         <h3 className="text-xl font-black dark:text-white mb-4 italic underline decoration-primary decoration-4 underline-offset-8">3. Common Red Flags</h3>
-                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
-                            <div className="text-center p-4"><span className="material-symbols-outlined text-4xl text-primary mb-2">payments</span><p className="text-xs font-black dark:text-white">Upfront Fees</p></div>
-                            <div className="text-center p-4"><span className="material-symbols-outlined text-4xl text-primary mb-2">chat</span><p className="text-xs font-black dark:text-white">IM Platforms Only</p></div>
-                            <div className="text-center p-4"><span className="material-symbols-outlined text-4xl text-primary mb-2">id_card</span><p className="text-xs font-black dark:text-white">Early ID Request</p></div>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-             </motion.div>
-          </section>
-        )}
+
       </main>
 
       {/* ===== FLOATING CHATBOT ===== */}
@@ -996,7 +942,19 @@ function App() {
                     {msg.role === 'user' ? (
                       <p className="text-sm leading-relaxed">{msg.content}</p>
                     ) : (
-                      <div className="chat-markdown">{renderMarkdown(msg.content)}</div>
+                      <>
+                        <div className="chat-markdown">{renderMarkdown(msg.content)}</div>
+                        {msg.suggestions && msg.suggestions.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">Have more questions?</p>
+                            <div className="flex flex-col gap-2">
+                              {msg.suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => handleSuggestionClick(s)} className="text-left px-3 py-2 text-xs font-bold bg-white dark:bg-slate-700 text-primary dark:text-primary-fixed-dim rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors shadow-sm">{s}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
@@ -1071,36 +1029,34 @@ function App() {
         </motion.button>
       )}
 
-      <footer className="w-full py-20 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-10">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+      <footer className="w-full py-16 bg-surface-container-lowest dark:bg-slate-950 border-t border-slate-200/50 dark:border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
             <div className="col-span-1 md:col-span-2">
-              <span className="text-3xl font-black tracking-tighter text-slate-900 dark:text-white">VerifyJob<span className="text-primary">.ai</span></span>
-              <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed font-medium">The world's most advanced open-source neural engine dedicated to identifying fraudulent job postings. Built for the modern workforce.</p>
+              <span className="text-2xl font-black tracking-tighter text-on-surface dark:text-white">FakeJob<span className="text-primary">Detector</span></span>
+              <p className="mt-4 text-sm text-on-surface-variant dark:text-slate-400 max-w-sm leading-relaxed font-medium">Advanced open-source neural engine dedicated to identifying fraudulent job postings. Safeguard your career with real-time AI analysis.</p>
             </div>
             <div>
-              <h5 className="font-black text-xs uppercase tracking-[0.2em] text-slate-900 dark:text-white mb-8">Navigation</h5>
-              <div className="flex flex-col gap-4">
-                <button onClick={() => setActiveView('home')} className="text-sm text-slate-500 hover:text-primary transition-colors text-left font-bold">Try Analyzer</button>
-                <button onClick={() => setActiveView('about')} className="text-sm text-slate-500 hover:text-primary transition-colors text-left font-bold">About Us</button>
-                <button onClick={() => setActiveView('documentation')} className="text-sm text-slate-500 hover:text-primary transition-colors text-left font-bold">How it Works</button>
+              <h5 className="font-bold text-[10px] uppercase tracking-[0.2em] text-on-surface dark:text-white mb-6">Explore</h5>
+              <div className="flex flex-col gap-3">
+                <button onClick={() => setActiveView('home')} className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors text-left font-medium">Analyzer Tool</button>
+                <button onClick={() => setActiveView('about')} className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors text-left font-medium">About the Engine</button>
               </div>
             </div>
             <div>
-              <h5 className="font-black text-xs uppercase tracking-[0.2em] text-slate-900 dark:text-white mb-8">Resources</h5>
-              <div className="flex flex-col gap-4">
-                <a className="text-sm text-slate-500 hover:text-primary transition-colors font-bold" href="#">Github Repository</a>
-                <a className="text-sm text-slate-500 hover:text-primary transition-colors font-bold" href="#">Dataset (Kaggle)</a>
-                <a className="text-sm text-slate-500 hover:text-primary transition-colors font-bold" href="#">Cyber Ethics</a>
+              <h5 className="font-bold text-[10px] uppercase tracking-[0.2em] text-on-surface dark:text-white mb-6">Open Source</h5>
+              <div className="flex flex-col gap-3">
+                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">GitHub Repository</a>
+                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">Kaggle Dataset</a>
+                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">API Access</a>
               </div>
             </div>
           </div>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-12 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">&copy; 2024 VerifyJob.ai | Integrated AI Analysis</p>
-            <div className="flex gap-10">
-              <a className="text-xs font-black text-slate-400 hover:text-primary transition-colors uppercase tracking-[0.1em]" href="#">Privacy</a>
-              <a className="text-xs font-black text-slate-400 hover:text-primary transition-colors uppercase tracking-[0.1em]" href="#">Terms</a>
-              <a className="text-xs font-black text-slate-400 hover:text-primary transition-colors uppercase tracking-[0.1em]" href="#">API</a>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-10 border-t border-slate-200/50 dark:border-slate-800/50">
+            <p className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 uppercase tracking-widest">&copy; {new Date().getFullYear()} FakeJobDetector All rights reserved.</p>
+            <div className="flex gap-6">
+              <a className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 hover:text-primary transition-colors uppercase tracking-widest" href="#">Privacy Policy</a>
+              <a className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 hover:text-primary transition-colors uppercase tracking-widest" href="#">Terms of Service</a>
             </div>
           </div>
         </div>
