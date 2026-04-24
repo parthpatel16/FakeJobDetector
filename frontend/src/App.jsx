@@ -36,12 +36,9 @@ function App() {
     }
   }, [isDarkMode]);
 
-  // Check chatbot availability on mount
+  // Chatbot is always considered available for user help
   useEffect(() => {
-    fetch("http://127.0.0.1:5000/chat/status")
-      .then(r => r.json())
-      .then(data => setChatAvailable(data.available))
-      .catch(() => setChatAvailable(false));
+    setChatAvailable(true);
   }, []);
 
   // Auto-scroll chat
@@ -64,6 +61,16 @@ function App() {
       setChatMessages([{ role: 'assistant', content: welcome }]);
     }
   }, [result]);
+
+  // Add generalized welcome message if chat opened without results
+  useEffect(() => {
+    if (chatOpen && !result && chatMessages.length === 0) {
+      setChatMessages([{
+        role: 'assistant',
+        content: "👋 Hello! I'm your **HireGuardAI Career Assistant**. I can help you analyze job postings, identify skill gaps, and create learning roadmaps.\n\nTo get started, **paste a job description** or **upload a screenshot** for a full safety and eligibility analysis!"
+      }]);
+    }
+  }, [chatOpen, result]);
 
   // Company verification is now handled directly in the main analysis result
 
@@ -159,7 +166,19 @@ function App() {
       
       setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply, suggestions: data.suggestions }]);
     } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
+      console.error('Chat error:', err);
+      let fallbackMsg = `❌ Error: ${err.message}`;
+      
+      // If it's a connection error, provide a helpful fallback based on current results
+      if (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) {
+        if (result) {
+          fallbackMsg = `⚠️ **Connection Notice**: I'm having trouble reaching my AI brain right now, but I can still see your analysis results!\n\nRegarding **${result.company_name}**, the tool detected a **${result.fraud_score}% Fraud Score**. My advice is to ${result.prediction === 'Fake' ? '**STAY SAFE and avoid sharing details**' : '**proceed with professional caution**'}. Please try again in a minute once the connection is restored!`;
+        } else {
+          fallbackMsg = `👋 **Connection Notice**: I'm currently having trouble connecting to my AI engine. Please ensure the backend server is running!\n\nIn the meantime, you can still use the main tool to analyze job descriptions and images.`;
+        }
+      }
+      
+      setChatMessages(prev => [...prev, { role: 'assistant', content: fallbackMsg }]);
     } finally {
       setChatLoading(false);
     }
@@ -386,7 +405,7 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="inline-block px-5 py-2 mb-8 text-[10px] font-black tracking-[0.2em] text-primary uppercase bg-primary-fixed dark:bg-primary/20 rounded-full"
               >
-                Advanced Phishing Detection
+                Advanced Job Scam Detection
               </motion.span>
               <motion.h1 
                 initial={{ opacity: 0, y: 20 }}
@@ -990,7 +1009,7 @@ function App() {
       </AnimatePresence>
 
       {/* Floating Chat Button (when chat is closed) */}
-      {!chatOpen && chatAvailable && (
+      {!chatOpen && (
         <motion.button
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}

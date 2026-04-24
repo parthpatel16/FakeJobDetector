@@ -101,17 +101,19 @@ else:
 # Track which API key is currently configured to avoid unnecessary reconfiguration
 _current_api_key = gemini_models_pool[0]["api_key"] if gemini_models_pool else None
 
-def safe_generate(prompt, generation_config=None, max_retries=2):
-    """Generates content using Gemini with automatic key + model fallback on rate limits.
-    Cycles through all API key × model combinations when quota is exceeded."""
+def safe_generate(prompt, generation_config=None, max_retries=2, contents=None):
+    """Generates content using Gemini with automatic key + model fallback.
+    Supports multimodal input (text + images)."""
     global _current_api_key
     
     if not gemini_models_pool:
         return None
     
+    # If contents is provided, use it (multimodal), otherwise wrap prompt in list
+    input_data = contents if contents is not None else [prompt]
+    
     last_error = None
     for model_info in gemini_models_pool:
-        # Switch API key if needed (each key has independent quota)
         if model_info["api_key"] != _current_api_key:
             genai.configure(api_key=model_info["api_key"])
             _current_api_key = model_info["api_key"]
@@ -119,26 +121,20 @@ def safe_generate(prompt, generation_config=None, max_retries=2):
         for attempt in range(max_retries):
             try:
                 response = model_info["model"].generate_content(
-                    prompt,
+                    input_data,
                     generation_config=generation_config or {}
                 )
                 return response
             except Exception as e:
                 error_str = str(e)
                 last_error = e
-                if "429" in error_str or "ResourceExhausted" in error_str or "quota" in error_str.lower():
+                if "429" in error_str or "ResourceExhausted" in error_str:
                     if attempt < max_retries - 1:
-                        wait_time = 2 ** attempt
-                        print(f"[WARN] Rate limited on {model_info['key_label']}:{model_info['name']}, retry in {wait_time}s...")
-                        _time.sleep(wait_time)
+                        _time.sleep(2 ** attempt)
                     else:
-                        print(f"[WARN] {model_info['key_label']}:{model_info['name']} exhausted, trying next...")
                         break
                 else:
-                    print(f"[ERROR] Gemini error ({model_info['key_label']}:{model_info['name']}): {e}")
                     break
-    
-    print(f"[ERROR] All keys & models exhausted. Last error: {last_error}")
     return None
 
 # --- Load Model and Vectorizer ---
@@ -232,14 +228,14 @@ def extract_company_name_with_gemini(text):
         return regex_name
     
     try:
-        prompt = f"""You are a data extraction tool. From the following job posting text, identify the company or organization name that is hiring.
-
+        prompt = f"""You are a professional data analyst. Identify the hiring company/organization from this job posting.
+        
 Instructions:
-- Return ONLY the company/organization name as plain text, exactly as it appears in the text.
-- If the text says "company name: XYZ" or "company: XYZ", return exactly "XYZ" as written.
-- Do NOT shorten, abbreviate, or modify the company name.
-- If no company or organization name is clearly mentioned, return exactly: Unknown
-- Do not return generic words like "years", "experience", "salary", "remote", "developer", etc.
+- Return ONLY the official company name.
+- EXCLUDE locations (e.g., if it says 'TCS Kolkata', return 'TCS').
+- EXCLUDE job titles (e.g., if it says 'Pega Developer - Infosys', return 'Infosys').
+- Do NOT include generic filler words.
+- If unsure or not mentioned, return exactly: Unknown
 
 Text:
 \"\"\"
@@ -350,7 +346,8 @@ You MUST respond in valid JSON format only. No markdown, no extra text. Use this
 IMPORTANT RULES:
 1. Be HONEST. If you don't have data about this company, say "No verified data available" rather than making things up.
 2. For unknown/small companies, the trust score should be LOW (20-40) unless there's strong evidence.
-3. For well-known companies (Google, Microsoft, TCS, Infosys etc.), the trust score should be HIGH (70-95).
+3. For well-known companies (Google, Microsoft, TCS, Infosys etc.), the trust score should be VERY HIGH (90-100).
+4. If ownership/CEO details are not easily found but the company is a well-known global brand (e.g., TCS), do NOT penalize the trust score.
 4. Include at least 5 factors in trust_breakdown covering: Website, Physical Address, Owner Transparency, Employee Presence, Social Proof, Business Consistency, Registration Proof.
 5. The response MUST be valid JSON."""
         
@@ -545,9 +542,9 @@ Text:
 
 Return JSON with exactly these fields:
 {{
-  "title": "Job title/position",
+  "title": "Job Title",
   "location": "Job location",
-  "salary": "Salary/CTC/compensation (e.g. 'Not Disclosed' or the amount)",
+  "salary": "Salary/CTC/compensation. IMPORTANT: ONLY extract if a currency symbol (₹, $, etc.) or 'LPA/CTC' is explicitly near a number. If it says 'Not Disclosed' or 'Competitive', return 'Not Disclosed'. DO NOT guess or use numbers like '15' or '16' from experience fields as salary.",
   "employment_type": "Full Time / Part Time / Contract / Freelance / Internship / Remote",
   "experience": "Experience required",
   "contact": "Phone, email, or website for contact (or 'Not Specified')",
@@ -635,11 +632,18 @@ You MUST respond in valid JSON format only. Use this exact structure:
   "summary": "A detailed 3-5 sentence analysis of this job posting. Explain WHY it appears to be {'fraudulent' if is_fake else 'legitimate'}. Reference specific phrases, patterns, or red flags from the actual text. Be specific and insightful, not generic.",
   "red_flags": ["Specific red flag 1 from the text", "Specific red flag 2", ...],
   "company_insight": "A specific insight about the company/employer based on the posting content. Reference actual details from the text.",
-  "recommendation": "Clear, actionable recommendation for the job seeker based on this specific posting."
+  "recommendation": "Clear, actionable recommendation for the job seeker based on this specific posting.",
+  "risk_rating": 45
 }}
+
+IMPORTANT: 
+- The "risk_rating" should be a number from 0 to 100 representing the probability of fraud based on your context-aware analysis. 
+- If the company is a well-known brand like TCS and mentions "No security deposit", the risk_rating should be VERY LOW (0-10).
 
 IMPORTANT:
 - Be SPECIFIC. Reference actual content from the job posting, not generic statements.
+- DO NOT hallucinate salary numbers. If the text says "Not Disclosed", DO NOT invent a number.
+- If the company is a high-reputation brand like TCS, be extremely careful about flagging "impersonation" unless there is clear evidence (e.g., a suspicious gmail.com contact or request for money).
 - If the posting is fake, identify the exact manipulative tactics used.
 - If legitimate, highlight what makes it trustworthy.
 - Keep red_flags as an empty array [] if the posting appears legitimate.
@@ -682,6 +686,7 @@ IMPORTANT:
                 "red_flags": gemini_analysis.get("red_flags", fallback["red_flags"]),
                 "company_insight": gemini_analysis.get("company_insight", fallback["company_insight"]),
                 "recommendation": gemini_analysis.get("recommendation", fallback["recommendation"]),
+                "risk_rating": gemini_analysis.get("risk_rating", 50 if is_fake else 20),
                 "source": "gemini"
             }
             print(f"[INFO] Gemini detailed summary generated successfully")
@@ -721,29 +726,29 @@ def get_analysis_pipeline(text, cleaned_text, prediction, confidence, highlights
         "status": "done"
     })
     
-    # Step 3: Pattern Scanning
+    # Step 3: Pattern Scanning (Context-Aware)
     checks_passed = []
     checks_failed = []
     
-    im_check = any(w in low for w in ["whatsapp", "telegram", "imo", "messenger"])
+    im_check = re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)whatsapp|telegram|imo|messenger", low)
     if im_check:
         checks_failed.append("IM platform contact detected")
     else:
         checks_passed.append("No suspicious contact methods")
     
-    fee_check = any(w in low for w in ["deposit", "registration fee", "processing fee", "security fee", "refundable"])
+    fee_check = re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)deposit|registration fee|processing fee|security fee|refundable", low)
     if fee_check:
         checks_failed.append("Upfront payment request detected")
     else:
         checks_passed.append("No upfront fees requested")
     
-    id_check = any(w in low for w in ["bank account", "aadhaar", "pan card", "cvv", "otp"])
+    id_check = re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)bank account|aadhaar|pan card|cvv|otp", low)
     if id_check:
         checks_failed.append("Sensitive data request detected")
     else:
         checks_passed.append("No early ID/financial data requests")
     
-    scam_check = any(w in low for w in ["daily pay", "earn fast", "no interview", "immediate join", "no experience", "earn daily", "hit like", "comment interested", "no investment"])
+    scam_check = re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)daily pay|earn fast|no interview|immediate join|no experience|earn daily|hit like|comment interested|no investment", low)
     if scam_check:
         checks_failed.append("'Too good to be true' language detected")
     else:
@@ -803,6 +808,21 @@ def get_highlights(text, top_n=5):
     feature_weight_map = {name: weight for name, weight in zip(feature_names, weights)}
     
     word_scores = []
+    # Check for high-risk markers (Heuristic Engine)
+    highlights = []
+    risk_keywords = [
+        "whatsapp", "telegram", "registration fee", "security deposit", 
+        "processing fee", "bank details", "otp", "password",
+        "no interview", "urgent hiring", "lottery", "easy money",
+        "send money", "payment", "crypto", "bitcoin", "investment"
+    ]
+    
+    # Context-aware risk detection: Only flag if not preceded by "no", "not", "don't", etc.
+    for kw in risk_keywords:
+        pattern = r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)" + re.escape(kw)
+        if re.search(pattern, cleaned, re.IGNORECASE):
+            highlights.append(kw)
+    
     for w in words:
         if w in feature_weight_map:
             score = feature_weight_map[w]
@@ -817,13 +837,14 @@ def get_detailed_analysis(text, prediction, confidence):
     low_text = text.lower()
     
     red_flags = []
-    if any(word in low_text for word in ["whatsapp", "telegram", "imo", "messenger"]):
+    # Context-aware red flag detection for the detailed analysis
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)whatsapp|telegram|imo|messenger", low_text):
         red_flags.append("Communication via instant messaging apps instead of official channels.")
-    if any(word in low_text for word in ["deposit", "registration fee", "processing fee", "security fee", "refundable"]):
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)deposit|registration fee|processing fee|security fee|refundable", low_text):
         red_flags.append("Request for upfront payment or 'security deposits'.")
-    if any(word in low_text for word in ["bank account", "aadhaar", "pan card", "cvv", "otp"]):
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)bank account|aadhaar|pan card|cvv|otp", low_text):
         red_flags.append("Requests for sensitive personal or financial identification early in the process.")
-    if any(word in low_text for word in ["daily pay", "earn fast", "no interview", "immediate join", "earn daily", "hit like", "comment interested", "no investment"]):
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)daily pay|earn fast|no interview|immediate join|earn daily|hit like|comment interested|no investment", low_text):
         red_flags.append("Signs of 'too good to be true' offers or bypassing standard hiring filters.")
     
     summary = ""
@@ -858,14 +879,13 @@ def get_prediction_data(text):
     probs = model.predict_proba(vec)[0]
     confidence = float(max(probs))
 
-    # HEURISTIC OVERRIDE: ML models can fail on short social media strings. 
-    # Hard-flag undeniable scam phrases to safeguard users.
+    # HEURISTIC OVERRIDE: Context-aware check to prevent false positives on "No security deposit"
     low_text = text.lower()
     override_flags = 0
-    if any(w in low_text for w in ["whatsapp", "telegram", "imo", "messenger"]): override_flags += 1
-    if any(w in low_text for w in ["deposit", "registration fee", "processing fee", "security fee", "refundable", "starter kit"]): override_flags += 2
-    if any(w in low_text for w in ["bank account", "aadhaar", "pan card", "cvv", "otp"]): override_flags += 2
-    if any(w in low_text for w in ["daily pay", "earn fast", "no interview", "earn daily", "hit like", "comment interested", "no investment"]): override_flags += 2
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)whatsapp|telegram|imo|messenger", low_text): override_flags += 1
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)deposit|registration fee|processing fee|security fee|refundable|starter kit", low_text): override_flags += 2
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)bank account|aadhaar|pan card|cvv|otp", low_text): override_flags += 2
+    if re.search(r"(?<!no\s)(?<!not\s)(?<!never\s)(?<!don't\s)(?<!doesn't\s)daily pay|earn fast|no interview|earn daily|hit like|comment interested|no investment", low_text): override_flags += 2
 
     if override_flags > 0:
         if prediction == 0:
@@ -899,10 +919,8 @@ def get_prediction_data(text):
         }
     
     # --- CALCULATE ADVANCED FRAUD SCORE ---
-    # ml_fraud_prob: Base probability of fraud
-    # if Prediction is Fake (1), ml_fraud_prob is probs[1]
-    # if Prediction is Real (0), ml_fraud_prob is (1 - probs[0]) which is probs[1]
-    ml_fraud_prob = probs[1]
+    # ml_fraud_prob: Base probability of fraud from the ML model
+    ml_fraud_prob = probs[1] 
     
     # If heuristics overrode ML, boost the fraud probability
     if override_flags > 0 and prediction == 1:
@@ -918,20 +936,54 @@ def get_prediction_data(text):
         company_penalty = 50 # Neutral/Unknown
     
     # Red Flag component
-    red_flags_count = len(analysis.get("red_flags", []))
-    if company_info and company_info.get("red_flags"):
-        red_flags_count += len(company_info["red_flags"])
+    # We differentiate between "detected red flags" (heuristic/AI) and their impact
+    analysis_flags = analysis.get("red_flags", [])
+    company_flags = company_info.get("red_flags", []) if company_info else []
+    total_red_flags = list(set(analysis_flags + company_flags)) # Unique flags
+    red_flags_count = len(total_red_flags)
     
-    flag_penalty = min(30, red_flags_count * 6)
+    # Penalty based on red flags count (exponentially increasing)
+    flag_penalty = min(40, (red_flags_count ** 1.5) * 5) if red_flags_count > 0 else 0
     
-    # Final Fraud Score (Weighted: 40% ML, 35% Company, 25% Red Flags/Heuristics)
-    fraud_score = (ml_component * 0.40) + (company_penalty * 0.35) + flag_penalty
+    # --- WEIGHTED CALCULATION ---
+    # We use a weighted average: 30% ML, 30% Company, 20% Flags, 20% Gemini Opinion
+    gemini_rating = analysis.get("risk_rating", 50 if prediction == 1 else 10)
     
-    # Safety Clamping for display logic consistency
+    if trust_score and trust_score >= 85:
+        # For High Trust companies, we trust Gemini and Company Score more
+        fraud_score = (ml_component * 0.15) + (company_penalty * 0.40) + (flag_penalty * 0.15) + (gemini_rating * 0.30)
+        
+        # SPECIAL OVERRIDE: If trust is extremely high (>90) and red flags are low (<=2)
+        if trust_score >= 90 and red_flags_count <= 2:
+            prediction = 0
+            # If Gemini also thinks it's low risk, drop even further
+            if gemini_rating <= 20:
+                fraud_score = min(5.0, fraud_score)
+            else:
+                fraud_score = min(12.0, fraud_score)
+    else:
+        # Standard weighted calculation
+        fraud_score = (ml_component * 0.30) + (company_penalty * 0.25) + (flag_penalty * 0.25) + (gemini_rating * 0.20)
+    
+    # Apply heuristic "overrides" directly to score if they were found
+    # CRITICAL FIX: Only apply these hard-flags if the company trust is low or unknown.
+    # Legitimate companies like TCS often mention "No security deposits" which triggers false positives.
+    if override_flags > 1 and (trust_score is None or trust_score < 80):
+        fraud_score = max(fraud_score, 75.0)
+        prediction = 1
+    
+    # --- FINAL VERDICT CLAMPING ---
+    # Ensure consistency between the 'Fake/Real' label and the score
     if prediction == 1: # Flagged as Fake
-        fraud_score = max(55.0, fraud_score)
+        if red_flags_count > 2:
+            fraud_score = max(70.0, fraud_score) # High risk if > 2 flags
+        else:
+            fraud_score = max(51.0, fraud_score) # Moderate risk
     else: # Flagged as Real
-        fraud_score = min(45.0, fraud_score)
+        if red_flags_count == 0 and trust_score and trust_score > 80:
+            fraud_score = min(15.0, fraud_score) # Very safe
+        else:
+            fraud_score = min(49.0, fraud_score) # Likely safe
     
     fraud_score = min(99.9, max(0.1, fraud_score))
 
@@ -1003,21 +1055,40 @@ def predict_image():
     try:
         image_bytes = file.read()
         img = Image.open(io.BytesIO(image_bytes))
-        
-        # Build base64 preview for frontend
         img_b64 = base64.b64encode(image_bytes).decode("utf-8")
         mime = file.content_type or "image/png"
+
+        # 1. NEW STRATEGY: Use Gemini Vision directly for higher accuracy than Tesseract
+        print("[INFO] Using Gemini Vision for image analysis")
+        vision_prompt = """Extract ALL the text from this job posting image. Preserve the hierarchy if possible. 
+        Also, identify the hiring company name explicitly at the very end as 'COMPANY_NAME: [name]'."""
         
-        # Extract text using OCR
-        extracted_text = pytesseract.image_to_string(img)
-        if not extracted_text.strip():
-            return jsonify({"error": "Could not extract any text from the image."}), 400
+        vision_response = safe_generate(vision_prompt, contents=[vision_prompt, img])
         
-        result = get_prediction_data(extracted_text)
+        if vision_response and vision_response.text:
+            raw_text = vision_response.text
+            # Extract company name if identified
+            extracted_company = None
+            if "COMPANY_NAME:" in raw_text:
+                extracted_company = raw_text.split("COMPANY_NAME:")[-1].strip()
+                raw_text = raw_text.split("COMPANY_NAME:")[0].strip()
+            
+            result = get_prediction_data(raw_text)
+            if extracted_company and (not result.get("company_name") or result["company_name"] == "Unknown"):
+                result["company_name"] = extracted_company
+        else:
+            # Fallback to Tesseract OCR if Gemini Vision fails
+            print("[WARN] Gemini Vision failed, falling back to Tesseract OCR")
+            extracted_text = pytesseract.image_to_string(img)
+            if not extracted_text.strip():
+                return jsonify({"error": "Could not extract any text from the image."}), 400
+            result = get_prediction_data(extracted_text)
+            
         result["image_preview"] = f"data:{mime};base64,{img_b64}"
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": f"OCR failed: {str(e)}"}), 500
+        print(f"[ERROR] Image prediction failed: {e}")
+        return jsonify({"error": f"Image analysis failed: {str(e)}"}), 500
 
 @app.route("/predict-url", methods=["POST"])
 def predict_url():
@@ -1132,7 +1203,7 @@ def company_verify():
 
 # --- AI Chatbot Endpoint ---
 
-CHATBOT_SYSTEM_PROMPT = """You are VerifyJob.ai Career Assistant — an expert AI career counselor embedded in a job fraud detection platform.
+CHATBOT_SYSTEM_PROMPT = """You are HireGuardAI Career Assistant — an expert AI career counselor embedded in a job fraud detection platform.
 
 YOUR CAPABILITIES:
 1. **Eligibility Analysis**: Compare the user's profile/skills against job requirements and give a clear eligibility breakdown.
@@ -1153,6 +1224,20 @@ FORMATTING RULES:
 
 CONTEXT: You have access to the analyzed job posting details below. Use this context to give personalized advice.
 """
+
+def get_fallback_chat_advice(job_context):
+    """Provides a safe, hardcoded response if Gemini is unavailable or rate-limited."""
+    if not job_context:
+        return "I'm sorry, I'm currently experiencing high demand and my AI brain is resting! Please try again in a few minutes. I can help with roadmaps, eligibility, and fraud safety once I'm back online."
+    
+    company = job_context.get('company_name', 'this company')
+    is_fake = job_context.get('prediction') == 'Fake'
+    score = job_context.get('fraud_score', 0)
+    
+    if is_fake:
+        return f"⚠️ **Service Notice**: My AI engine is currently over-capacity, but here is my safety assessment for **{company}**:\n\nThis posting has a **high Fraud Score ({score}%)**. I strongly advise you NOT to share Aadhaar/PAN details or pay any 'security deposits'. Legitimate employers like {company} (if this is an impersonation) will never ask for money via WhatsApp or Telegram.\n\n*Please try again in a few minutes for a detailed skill roadmap.*"
+    else:
+        return f"✅ **Service Notice**: My AI engine is currently over-capacity, but regarding the role at **{company}**:\n\nOur analysis shows a **low Fraud Score ({score}%)**, meaning it appears legitimate. You can proceed with professional caution. I recommend verifying the recruiter's email domain matches the official company website.\n\n*Please try again in a few minutes for interview prep and eligibility tips!*"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -1240,10 +1325,17 @@ Red Flags Found: {', '.join(job_context.get('analysis', {}).get('red_flags', [])
             except Exception as e:
                 last_error = e
                 print(f"[WARN] Chat failed with {model_info['key_label']}:{model_info['name']}: {e}")
-                # Continue to next model in pool
                 continue
-                
-        return jsonify({"error": f"All AI models exhausted. Last error: {str(last_error)}"}), 500
+        
+        # If we reach here, all models failed
+        fallback_reply = get_fallback_chat_advice(job_context)
+        return jsonify({
+            "reply": fallback_reply,
+            "suggestions": ["Try again in 2 minutes", "What are general scam signs?", "How to verify a company manually?"],
+            "status": "fallback",
+            "error": f"API Quota reached. Providing static safety advice."
+        })
+        
     except Exception as e:
         print(f"[ERROR] Chatbot critical failure: {traceback.format_exc()}")
         return jsonify({"error": f"AI response failed: {str(e)}"}), 500
