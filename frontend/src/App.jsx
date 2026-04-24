@@ -330,7 +330,7 @@ function App() {
     "What skills do I need?",
     "Help me prepare for the interview",
   ] : [
-    "How does FakeJobDetector work?",
+    "How does HireGuardAI work?",
     "What are common job scam signs?",
     "Tips for safe job searching",
   ];
@@ -345,7 +345,7 @@ function App() {
               onClick={() => setActiveView('home')}
               className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white font-headline cursor-pointer hover:scale-105 transition-transform"
             >
-              FakeJob<span className="text-primary">Detector</span>
+              HireGuard<span className="text-primary">AI</span>
             </span>
             <div className="hidden md:flex gap-8 items-center">
               {['home', 'about'].map((view) => (
@@ -852,7 +852,7 @@ function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-16">
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">psychology</span>The AI Engine</h3>
-                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">FakeJobDetector uses a sophisticated Random Forest ensemble model trained on over 18,000 real and fraudulent job postings. It doesn't just look for words; it analyzes structural patterns, urgency levels, and data request triggers.</p>
+                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">HireGuardAI uses a sophisticated Random Forest ensemble model trained on over 18,000 real and fraudulent job postings. It doesn't just look for words; it analyzes structural patterns, urgency levels, and data request triggers.</p>
                    </div>
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">verified</span>Our Mission</h3>
@@ -1008,27 +1008,25 @@ function App() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
             <div className="col-span-1 md:col-span-2">
-              <span className="text-2xl font-black tracking-tighter text-on-surface dark:text-white">FakeJob<span className="text-primary">Detector</span></span>
+              <span className="text-2xl font-black tracking-tighter text-on-surface dark:text-white">HireGuard<span className="text-primary">AI</span></span>
               <p className="mt-4 text-sm text-on-surface-variant dark:text-slate-400 max-w-sm leading-relaxed font-medium">Advanced open-source neural engine dedicated to identifying fraudulent job postings. Safeguard your career with real-time AI analysis.</p>
             </div>
             <div>
               <h5 className="font-bold text-[10px] uppercase tracking-[0.2em] text-on-surface dark:text-white mb-6">Explore</h5>
               <div className="flex flex-col gap-3">
-                <button onClick={() => setActiveView('home')} className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors text-left font-medium">Analyzer Tool</button>
+                <a href="https://auditgpt-1.onrender.com/" target="_blank" rel="noopener noreferrer" className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors text-left font-medium">AuditGPT</a>
                 <button onClick={() => setActiveView('about')} className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors text-left font-medium">About the Engine</button>
               </div>
             </div>
             <div>
               <h5 className="font-bold text-[10px] uppercase tracking-[0.2em] text-on-surface dark:text-white mb-6">Open Source</h5>
               <div className="flex flex-col gap-3">
-                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">GitHub Repository</a>
-                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">Kaggle Dataset</a>
-                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="#">API Access</a>
+                <a className="text-sm text-on-surface-variant dark:text-slate-400 hover:text-primary transition-colors font-medium" href="https://github.com/parthpatel16/FakeJobDetector" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
               </div>
             </div>
           </div>
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-10 border-t border-slate-200/50 dark:border-slate-800/50">
-            <p className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 uppercase tracking-widest">&copy; {new Date().getFullYear()} FakeJobDetector All rights reserved.</p>
+            <p className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 uppercase tracking-widest">&copy; {new Date().getFullYear()} HireGuardAI All rights reserved.</p>
             <div className="flex gap-6">
               <a className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 hover:text-primary transition-colors uppercase tracking-widest" href="#">Privacy Policy</a>
               <a className="text-[10px] font-bold text-on-surface-variant dark:text-slate-500 hover:text-primary transition-colors uppercase tracking-widest" href="#">Terms of Service</a>
