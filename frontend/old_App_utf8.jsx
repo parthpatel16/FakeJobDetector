@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -58,14 +58,45 @@ function App() {
   useEffect(() => {
     if (result && chatMessages.length === 0) {
       const welcome = result.prediction === 'Fake'
-        ? `⚠️ This job posting was flagged as **potentially fraudulent** (**${result.fraud_score}% Fraud Score**). I strongly advise caution.\n\nI can help you understand why it was flagged, or answer any career questions. What would you like to know?`
-        : `✅ This job posting appears **legitimate** (only **${result.fraud_score}% Fraud Score**).\n\nI can help you check if you're eligible, create a skill roadmap, or prepare for the interview. Ask me anything!`;
+        ? `ΓÜá∩╕Å This job posting was flagged as **potentially fraudulent** (${result.confidence}% confidence). I strongly advise caution.\n\nI can help you understand why it was flagged, or answer any career questions. What would you like to know?`
+        : `Γ£à This job posting appears **legitimate** (${result.confidence}% confidence).\n\nI can help you check if you're eligible, create a skill roadmap, or prepare for the interview. Ask me anything!`;
       
       setChatMessages([{ role: 'assistant', content: welcome }]);
     }
   }, [result]);
 
-  // Company verification is now handled directly in the main analysis result
+  // Async company verification ΓÇö fires after prediction result arrives
+  useEffect(() => {
+    if (result && result.company_name) {
+      setCompanyLoading(true);
+      setCompanyReport(null);
+      fetch("http://127.0.0.1:5000/company-verify", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: result.company_name,
+          job_text: result.extracted_text || '',
+        }),
+      })
+        .then(r => r.json())
+        .then(data => setCompanyReport(data.company_info))
+        .catch(err => {
+          console.error('Company verification failed:', err);
+          setCompanyReport({ name: result.company_name, source: 'error', verdict: 'Verification request failed.' });
+        })
+        .finally(() => setCompanyLoading(false));
+    } else if (result && !result.company_name) {
+      // No company name found at all
+      setCompanyReport({
+        name: 'Unknown',
+        trust_score: 0,
+        verdict: 'No company name detected in the job posting. This is often a sign of fraudulent listings.',
+        red_flags: ['No company name provided ΓÇö legitimate employers always identify themselves.'],
+        trust_breakdown: [{ factor: 'Company Identity', status: 'fail', detail: 'No company name found in posting' }],
+        source: 'none',
+      });
+    }
+  }, [result]);
 
   const resetState = () => {
     setResult(null);
@@ -120,9 +151,6 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Analysis failed');
       setResult(data);
-      if (data.company_info) {
-        setCompanyReport(data.company_info);
-      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -159,7 +187,7 @@ function App() {
       
       setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply, suggestions: data.suggestions }]);
     } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `Γ¥î Error: ${err.message}` }]);
     } finally {
       setChatLoading(false);
     }
@@ -229,7 +257,7 @@ function App() {
         elements.push(<h2 key={i} className="font-black text-lg mt-4 mb-2 text-on-surface dark:text-white" dangerouslySetInnerHTML={{ __html: formatInline(trimmed.slice(2)) }} />);
       }
       // Bullet points
-      else if (trimmed.match(/^[-*•]\s/)) {
+      else if (trimmed.match(/^[-*ΓÇó]\s/)) {
         inList = true;
         listItems.push(<li key={i} className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInline(trimmed.slice(2)) }} />);
       }
@@ -434,7 +462,7 @@ function App() {
                   >
                     <span className="material-symbols-outlined text-sm transition-transform duration-200" style={{ transform: showInputGuide ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
                     <span className="material-symbols-outlined text-sm">info</span>
-                    Tips for better results — What to include
+                    Tips for better results ΓÇö What to include
                   </button>
                   <AnimatePresence>
                     {showInputGuide && (
@@ -446,7 +474,7 @@ function App() {
                         className="overflow-hidden"
                       >
                         <div className="mt-4 p-6 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10 dark:border-primary/20">
-                          <p className="text-xs font-bold text-on-surface dark:text-white mb-4 uppercase tracking-widest">📋 For the most accurate analysis, include:</p>
+                          <p className="text-xs font-bold text-on-surface dark:text-white mb-4 uppercase tracking-widest">≡ƒôï For the most accurate analysis, include:</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {[
                               { icon: 'domain', label: 'Company Name', hint: 'Who is hiring?' },
@@ -466,7 +494,7 @@ function App() {
                               </div>
                             ))}
                           </div>
-                          <p className="text-[10px] text-on-surface-variant dark:text-slate-500 mt-4 italic">💡 The more details you provide, the more accurate and comprehensive our analysis will be.</p>
+                          <p className="text-[10px] text-on-surface-variant dark:text-slate-500 mt-4 italic">≡ƒÆí The more details you provide, the more accurate and comprehensive our analysis will be.</p>
                         </div>
                       </motion.div>
                     )}
@@ -560,12 +588,9 @@ function App() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <div className="bg-surface-container-low dark:bg-slate-800 p-6 rounded-[1.5rem] text-center min-w-[200px] border border-slate-200/30 dark:border-slate-700">
-                          <span className="block text-xs font-black text-on-surface-variant dark:text-slate-400 uppercase tracking-widest mb-1">Fraud Score</span>
-                          <span className={`text-4xl font-black tracking-tighter ${result.fraud_score > 50 ? 'text-red-500' : 'text-green-500'}`}>{result.fraud_score}%</span>
-                          <div className="mt-2 pt-2 border-t border-slate-200/20">
-                            <span className="block text-[9px] font-black text-on-surface-variant dark:text-slate-500 uppercase tracking-widest">Model Confidence: {result.ml_confidence}%</span>
-                          </div>
+                        <div className="bg-surface-container-low dark:bg-slate-800 p-6 rounded-[1.5rem] text-center min-w-[180px] border border-slate-200/30 dark:border-slate-700">
+                          <span className="block text-xs font-black text-on-surface-variant dark:text-slate-400 uppercase tracking-widest mb-1">Confidence</span>
+                          <span className={`text-4xl font-black tracking-tighter ${result.prediction === 'Fake' ? 'text-red-500' : 'text-green-500'}`}>{result.confidence}%</span>
                         </div>
                         {chatAvailable && (
                           <button
@@ -593,7 +618,7 @@ function App() {
                       </motion.div>
                     )}
 
-                    {/* Company Due Diligence Card — CENTER/MAIN */}
+                    {/* Company Due Diligence Card ΓÇö CENTER/MAIN */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-primary/10 to-transparent rounded-bl-full"></div>
                       <h3 className="text-xl font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
@@ -613,7 +638,7 @@ function App() {
                           <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
                           <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
                           <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
-                          <p className="text-[10px] text-primary font-bold uppercase tracking-widest text-center mt-4 animate-pulse">🔍 Running AI due-diligence check...</p>
+                          <p className="text-[10px] text-primary font-bold uppercase tracking-widest text-center mt-4 animate-pulse">≡ƒöì Running AI due-diligence check...</p>
                         </div>
                       )}
 
@@ -685,7 +710,7 @@ function App() {
                           {/* Red Flags */}
                           {companyReport.red_flags && companyReport.red_flags.length > 0 && (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-red-500">🚨 Red Flags</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-red-500">≡ƒÜ¿ Red Flags</p>
                               {companyReport.red_flags.map((flag, i) => (
                                 <div key={i} className="flex gap-2 items-start bg-red-500/5 p-2.5 rounded-xl border border-red-500/10">
                                   <span className="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
@@ -698,7 +723,7 @@ function App() {
                           {/* Positive Signs */}
                           {companyReport.positive_signs && companyReport.positive_signs.length > 0 && (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-green-500">✅ Positive Signs</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Γ£à Positive Signs</p>
                               {companyReport.positive_signs.map((sign, i) => (
                                 <div key={i} className="flex gap-2 items-start bg-green-500/5 p-2.5 rounded-xl border border-green-500/10">
                                   <span className="material-symbols-outlined text-green-500 text-sm mt-0.5">check_circle</span>
@@ -722,7 +747,7 @@ function App() {
 
                           {/* Source badge */}
                           <p className="text-[9px] text-on-surface-variant dark:text-slate-600 uppercase tracking-widest text-right">
-                            {companyReport.source === 'gemini' ? '🤖 AI-Powered Analysis' : companyReport.source === 'none' ? '⚠️ No Company Detected' : companyReport.source === 'error' ? '❌ Verification Failed' : 'ℹ️ Basic Info'}
+                            {companyReport.source === 'gemini' ? '≡ƒñû AI-Powered Analysis' : companyReport.source === 'none' ? 'ΓÜá∩╕Å No Company Detected' : companyReport.source === 'error' ? 'Γ¥î Verification Failed' : 'Γä╣∩╕Å Basic Info'}
                           </p>
                         </div>
                       )}
@@ -733,7 +758,7 @@ function App() {
                       )}
                     </motion.div>
 
-                    {/* Job Details Card — CENTER/MAIN */}
+                    {/* Job Details Card ΓÇö CENTER/MAIN */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl border border-slate-200/20 dark:border-slate-800">
                       <h3 className="text-xl font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary text-2xl">work</span>Extracted Job Details
@@ -826,7 +851,7 @@ function App() {
                     <p className="text-sm italic text-on-surface-variant dark:text-slate-400 bg-white/30 dark:bg-slate-950/30 p-5 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 leading-relaxed">{result.extracted_text}</p>
                   </motion.div>
 
-                  {/* ===== ANALYSIS PIPELINE — AT THE BOTTOM ===== */}
+                  {/* ===== ANALYSIS PIPELINE ΓÇö AT THE BOTTOM ===== */}
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
                     <h3 className="text-lg font-black text-on-surface dark:text-white mb-6 flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary">account_tree</span>How We Analyzed This
@@ -860,11 +885,11 @@ function App() {
                    </div>
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">smart_toy</span>AI Career Assistant</h3>
-                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">Powered by Google's Gemini AI, our integrated chatbot analyzes job requirements against your skills, creates personalized learning roadmaps, and guides you through interview preparation — all within the same platform.</p>
+                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">Powered by Google's Gemini AI, our integrated chatbot analyzes job requirements against your skills, creates personalized learning roadmaps, and guides you through interview preparation ΓÇö all within the same platform.</p>
                    </div>
                    <div className="bg-surface-container-low dark:bg-slate-900 p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
                       <h3 className="text-2xl font-black dark:text-white mb-6 flex items-center gap-3"><span className="material-symbols-outlined text-primary">school</span>Roadmap Generator</h3>
-                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">Missing skills for a role? Our AI creates week-by-week learning plans with curated resources from Coursera, YouTube, and official docs — turning skill gaps into actionable study schedules.</p>
+                      <p className="text-on-surface-variant dark:text-slate-400 leading-relaxed">Missing skills for a role? Our AI creates week-by-week learning plans with curated resources from Coursera, YouTube, and official docs ΓÇö turning skill gaps into actionable study schedules.</p>
                    </div>
                 </div>
              </motion.div>

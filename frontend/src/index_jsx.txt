@@ -1,0 +1,244 @@
+
+
+
+<nav>
+  <a className="nav-brand" href="#home"><span className="ndot"></span>JOBSHIELD</a>
+  <div className="nav-links">
+    <a href="#how">Process</a>
+    <a href="#features">Features</a>
+    <a href="#proof">Why Us</a>
+    <a href="landing.html" className="nav-cta">Detect Now →</a>
+  </div>
+</nav>
+
+
+<section id="home">
+  <div className="hgrid"></div>
+  <div className="hglow"></div>
+  <div className="hero-inner">
+    <div>
+      <div className="eyebrow"><span className="eyebrow-l"></span>AI-Powered Fraud Detection System</div>
+      <h1 className="htitle">
+        STOP<br />
+        <span className="outline">FAKE</span><br />
+        JOBS<span className="gfill">.</span>
+      </h1>
+      <p className="hdesc">Paste any job listing, email, or link.<br /><strong>JobShield's AI tears it apart in seconds</strong> — exposing scam patterns, red flags, and fraud risks before they fool you.</p>
+      <div className="hbtns">
+        <a className="btn-main" href="landing.html">⚡ Run Free Detection</a>
+        <a className="btn-ghost" href="#how">See How It Works →</a>
+      </div>
+    </div>
+    <div className="hvisual">
+      <div className="shield-wrap">
+        <div className="hex-ring"></div>
+        <div className="hex-ring"></div>
+        <div className="hex-ring"></div>
+        <svg viewBox="0 0 340 400" fill="none" xmlns="http://www.w3.org/2000/svg" style={{width:"100%",height:"100%",position:"relative",zIndex:"2"}}>
+          <path d="M170 18 L315 72 L315 195 C315 290 232 352 170 374 C108 352 25 290 25 195 L25 72 Z" fill="rgba(8,28,21,0.92)" stroke="rgba(207,175,90,0.2)" stroke-width="1.5"/ />
+          <path d="M170 50 L288 95 L288 195 C288 268 222 318 170 337 C118 318 52 268 52 195 L52 95 Z" fill="rgba(27,67,50,0.25)" stroke="rgba(207,175,90,0.08)" stroke-width="1"/ />
+          <line x1="25" y1="133" x2="315" y2="133" stroke="rgba(207,175,90,0.05)" stroke-width="1"/ />
+          <line x1="25" y1="195" x2="315" y2="195" stroke="rgba(207,175,90,0.05)" stroke-width="1"/ />
+          <line x1="25" y1="257" x2="315" y2="257" stroke="rgba(207,175,90,0.05)" stroke-width="1"/ />
+          <line x1="170" y1="18" x2="170" y2="374" stroke="rgba(207,175,90,0.05)" stroke-width="1"/ />
+          <path d="M118 196 L152 232 L228 154" stroke="rgba(207,175,90,0.25)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/ />
+          <path d="M118 196 L152 232 L228 154" stroke="#CFAF5A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/ />
+          <text x="170" y="312" text-anchor="middle" font-family="DM Mono,monospace" font-size="10" fill="rgba(207,175,90,0.38)" letter-spacing="5">PROTECTED</text>
+          <rect x="25" y="0" width="290" height="1.5" fill="url(#sg)" opacity="0.85" />
+            <animateTransform attributeName="transform" type="translate" values="0,55;0,340;0,55" dur="2.5s" repeatCount="indefinite"/>
+          </rect>
+          <defs>
+            <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0" />
+              <stop offset="0%" stop-color="transparent"/ />
+              <stop offset="50%" stop-color="#CFAF5A"/ />
+              <stop offset="100%" stop-color="transparent"/ />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div className="hstats">
+    <div className="hst"><div className="hst-n">4+</div><div className="hst-l">Detection Modes</div></div>
+    <div className="hst"><div className="hst-n">&lt;2s</div><div className="hst-l">Analysis Speed</div></div>
+    <div className="hst"><div className="hst-n">AI</div><div className="hst-l">Powered Engine</div></div>
+  </div>
+</section>
+
+
+<div className="ticker">
+  <div className="ttrack">
+    <div className="titem">AI Job Analyzer <span className="tsep">✦</span></div>
+    <div className="titem">Email Fraud Detection <span className="tsep">✦</span></div>
+    <div className="titem">OCR Poster Scanner <span className="tsep">✦</span></div>
+    <div className="titem">Link Risk Scanner <span className="tsep">✦</span></div>
+    <div className="titem">Pattern Recognition <span className="tsep">✦</span></div>
+    <div className="titem">Instant Fraud Score <span className="tsep">✦</span></div>
+    <div className="titem">Zero Data Stored <span className="tsep">✦</span></div>
+    <div className="titem">AI Job Analyzer <span className="tsep">✦</span></div>
+    <div className="titem">Email Fraud Detection <span className="tsep">✦</span></div>
+    <div className="titem">OCR Poster Scanner <span className="tsep">✦</span></div>
+    <div className="titem">Link Risk Scanner <span className="tsep">✦</span></div>
+    <div className="titem">Pattern Recognition <span className="tsep">✦</span></div>
+    <div className="titem">Instant Fraud Score <span className="tsep">✦</span></div>
+    <div className="titem">Zero Data Stored <span className="tsep">✦</span></div>
+  </div>
+</div>
+
+
+<section className="sec sec-dark" id="how">
+  <div className="seyebrow"><span></span>The Process</div>
+  <h2 className="stitle light r">HOW IT <em>WORKS</em></h2>
+  <div className="steps">
+    <div className="scard r" data-n="01">
+      <span className="snum">— 01</span>
+      <div className="sicon">📋</div>
+      <div className="sname">Paste Your Input</div>
+      <p className="sbody">Job description, email body, poster image, or a suspicious URL. Any format. Any source.</p>
+      <div className="sbar"></div>
+    </div>
+    <div className="scard r" data-n="02" style={{transitionDelay:".1s"}}>
+      <span className="snum">— 02</span>
+      <div className="sicon">🧠</div>
+      <div className="sname">AI Dissects Patterns</div>
+      <p className="sbody">Vague roles, fee requests, grammar issues, unrealistic salaries — every signal gets checked.</p>
+      <div className="sbar"></div>
+    </div>
+    <div className="scard r" data-n="03" style={{transitionDelay:".2s"}}>
+      <span className="snum">— 03</span>
+      <div className="sicon">📊</div>
+      <div className="sname">Fraud Score Built</div>
+      <p className="sbody">A 0–100 risk score with a full breakdown of every red flag discovered.</p>
+      <div className="sbar"></div>
+    </div>
+    <div className="scard r" data-n="04" style={{transitionDelay:".3s"}}>
+      <span className="snum">— 04</span>
+      <div className="sicon">🛡</div>
+      <div className="sname">Instant Verdict</div>
+      <p className="sbody">Safe. Suspicious. Dangerous. One clear answer so you know what to do next.</p>
+      <div className="sbar"></div>
+    </div>
+  </div>
+</section>
+
+
+<section id="features">
+  <div>
+    <div className="seyebrow" style={{color:"var(--gold)"}}>
+      <span style={{background:"var(--gold)"}}></span>Capabilities
+    </div>
+    <h2 className="stitle dark-t r" style={{marginBottom:"36px"}}>WHAT WE<br /><em>DETECT</em></h2>
+    <div className="flist">
+      <div className="fitem r">
+        <div className="ficon">🤖</div>
+        <div>
+          <div className="fname">AI Job Analyzer</div>
+          <p className="fdesc">Paste any listing. The AI checks role clarity, salary realism, company legitimacy, and contact authenticity.</p>
+        </div>
+      </div>
+      <div className="fitem r" style={{transitionDelay:".08s"}}>
+        <div className="ficon">📧</div>
+        <div>
+          <div className="fname">Email Fraud Detection</div>
+          <p className="fdesc">Paste recruitment emails. Detects phishing language, urgency pressure tactics, and spoofed sender identities.</p>
+        </div>
+      </div>
+      <div className="fitem r" style={{transitionDelay:".15s"}}>
+        <div className="ficon">🖼</div>
+        <div>
+          <div className="fname">Poster Scanner (OCR)</div>
+          <p className="fdesc">Upload a job poster photo. OCR extracts text instantly and runs the full fraud analysis pipeline.</p>
+        </div>
+      </div>
+      <div className="fitem r" style={{transitionDelay:".22s"}}>
+        <div className="ficon">🔗</div>
+        <div>
+          <div className="fname">Link Risk Scanner</div>
+          <p className="fdesc">Submit a job ad URL. We check domain age, redirect chains, SSL validity, and scam databases.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <div className="twrap r" style={{transitionDelay:".1s"}}>
+    <div className="thead">
+      <div className="tdot" style={{background:"#e85c5c"}}></div>
+      <div className="tdot" style={{background:"#e8c96a",marginLeft:"4px"}}></div>
+      <div className="tdot" style={{background:"#52d48c",marginLeft:"4px"}}></div>
+      <div className="ttitle">jobshield_engine.py</div>
+    </div>
+    <div className="tbody">
+<span className="td">╔══════════════════════════════════╗</span>
+<span className="td">║  JobShield AI  ·  Engine v2.1    ║</span>
+<span className="td">╚══════════════════════════════════╝</span>
+
+<span className="ti">[ INPUT  ]</span> job_description.txt
+<span style={{color:"#52d48c"}}>[ STATUS ]</span> Scanning target...
+<div className="sa"></div>
+<span className="ti">[ CHECKS ]</span> Running 14 pattern tests
+
+<span className="tk">upfront_fee_request</span>   <span className="tw">⚠ CRITICAL</span>
+<span className="tk">vague_job_title    </span>   <span className="tw">⚠ HIGH    </span>
+<span className="tk">unverified_domain  </span>   <span className="tw">⚠ HIGH    </span>
+<span className="tk">grammar_anomalies  </span>   <span className="tw">⚠ MEDIUM  </span>
+<span className="tk">salary_unrealistic </span>   <span className="tw">⚠ HIGH    </span>
+<span className="tk">no_company_info    </span>   <span className="tw">⚠ MEDIUM  </span>
+<span className="tk">ssl_certificate    </span>   <span style={{color:"#52d48c"}}>✓ PASS    </span>
+
+<span className="ti">[ SCORE  ]</span> <span className="tw">87 / 100</span>
+<div className="rb"><div className="rf"></div></div>
+
+<span className="tw">[ RESULT ] 🚨 DANGEROUS — Do not apply.</span>
+<span className="td">[ TIME   ] Analysis complete in 1.4s</span>
+    </div>
+  </div>
+</section>
+
+
+<section className="sec" id="proof" style={{background:"var(--bg)"}}>
+  <div className="seyebrow"><span></span>Why JobShield</div>
+  <h2 className="stitle dark-t r">BUILT TO <em>PROTECT</em></h2>
+  <div className="pgrid">
+    <div className="pcard r">
+      <div className="pnum">4+</div>
+      <div className="plabel">Scan Modes</div>
+      <p className="pdesc">Text, email, image, and link — every channel scammers use, we cover it.</p>
+    </div>
+    <div className="pcard r" style={{transitionDelay:".1s"}}>
+      <div className="pnum">&lt;2s</div>
+      <div className="plabel">Analysis Speed</div>
+      <p className="pdesc">Full AI analysis delivered in under 2 seconds. No waiting, no forever spinners.</p>
+    </div>
+    <div className="pcard r" style={{transitionDelay:".2s"}}>
+      <div className="pnum">0₹</div>
+      <div className="plabel">Cost to You</div>
+      <p className="pdesc">Free to use. No login. No credit card. Protecting yourself shouldn't cost anything.</p>
+    </div>
+  </div>
+</section>
+
+
+<section id="start">
+  <div className="cbg"></div>
+  <div className="cgrid"></div>
+  <div className="cinner">
+    <div className="cbadge">
+      <div className="cbdot"></div>
+      <div className="cbtxt">Free — No Sign-Up Required</div>
+    </div>
+    <h2 className="ctitle r">DON'T GET<br /><span className="outline">FOOLED.</span></h2>
+    <p className="csub r" style={{transitionDelay:".1s"}}>One paste. One click. Instant verdict. JobShield has your back before you ever hit submit on that fake application.</p>
+    <div className="cbtns r" style={{transitionDelay:".2s"}}>
+      <a className="btn-main" href="landing.html">⚡ Start Detecting — Free</a>
+      <a className="btn-ghost" href="#how" style={{borderColor:"rgba(207,175,90,.2)",color:"rgba(255,255,255,.38)"}}>Learn More →</a>
+    </div>
+  </div>
+</section>
+
+
+<footer>
+  <div className="fbrand"><span className="ndot"></span>JOBSHIELD</div>
+  <div className="fcredit">Aryan &nbsp;·&nbsp; Manthan &nbsp;·&nbsp; Dhairya</div>
+</footer>
+

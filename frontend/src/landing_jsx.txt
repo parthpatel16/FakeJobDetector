@@ -1,0 +1,201 @@
+
+
+
+<nav>
+  <a className="nav-brand" href="index.html">
+    <span className="ndot"></span>JOBSHIELD
+  </a>
+  <div className="nav-right">
+    <a className="nav-back" href="index.html">← Back to Home</a>
+    <div className="nav-status"><span className="status-dot"></span>Engine Online</div>
+  </div>
+</nav>
+
+<div className="app-wrap">
+
+  
+  <div className="left-panel">
+
+    <div className="panel-header">
+      <div className="panel-eyebrow"><span></span>Detection Engine</div>
+      <div className="panel-title">RUN YOUR<br /><em>ANALYSIS</em></div>
+    </div>
+
+    
+    <div className="tabs">
+      <button className="tab active" onclick="switchTab('job',this)">
+        <span className="tab-icon">🤖</span> Job Text
+      </button>
+      <button className="tab" onclick="switchTab('email',this)">
+        <span className="tab-icon">📧</span> Email
+      </button>
+      <button className="tab" onclick="switchTab('poster',this)">
+        <span className="tab-icon">🖼</span> Poster
+      </button>
+      <button className="tab" onclick="switchTab('link',this)">
+        <span className="tab-icon">🔗</span> Link
+      </button>
+    </div>
+
+    
+    <div className="tab-panel active" id="tab-job">
+      <div className="input-group">
+        <div className="input-label">Paste Job Description</div>
+        <textarea className="field" id="jobtext" placeholder="Paste the full job listing here — title, description, requirements, salary, contact info..."></textarea>
+      </div>
+      <button className="btn-analyze" onclick="scan()">
+        <i className="fa-solid fa-bolt"></i>
+        <span>Analyze Job Listing</span>
+      </button>
+    </div>
+
+    
+    <div className="tab-panel" id="tab-email">
+      <div className="input-group">
+        <div className="input-label">Paste Recruitment Email</div>
+        <textarea className="field" id="emailtext" placeholder="Paste the full recruitment email content here..."></textarea>
+      </div>
+      <button className="btn-analyze" onclick="scanEmail()">
+        <i className="fa-solid fa-bolt"></i>
+        <span>Analyze Email</span>
+      </button>
+    </div>
+
+    
+    <div className="tab-panel" id="tab-poster">
+      <div className="input-group">
+        <div className="input-label">Upload Job Poster Image</div>
+        <div className="file-drop" id="dropzone">
+          <input type="file" id="poster" accept="image/*" onchange="updateFileName(this)" />
+          <span className="file-drop-icon">🖼</span>
+          <div className="file-drop-text">Drop image here or click to browse</div>
+          <div className="file-drop-name" id="fileName"></div>
+        </div>
+      </div>
+      <button className="btn-analyze" onclick="scanPoster()">
+        <i className="fa-solid fa-bolt"></i>
+        <span>Scan Poster via OCR</span>
+      </button>
+      <div className="input-label" style={{marginTop:"6px"}}>Poster Analysis Result</div>
+      <div className="result-box" id="posterResult">No poster scanned yet.</div>
+    </div>
+
+    
+    <div className="tab-panel" id="tab-link">
+      <div className="input-group">
+        <div className="input-label">Paste Job Listing URL</div>
+        <input className="field" type="text" id="link" placeholder="https://example.com/job/apply-now" />
+      </div>
+      <button className="btn-analyze" onclick="scanLink()">
+        <i className="fa-solid fa-bolt"></i>
+        <span>Scan Link for Risk</span>
+      </button>
+      <div className="input-label" style={{marginTop:"6px"}}>Link Scan Result</div>
+      <div className="result-box" id="linkResult">No link scanned yet.</div>
+    </div>
+
+    
+    <div className="loader-wrap" id="loading">
+      <div className="loader-track"><div className="loader-fill"></div></div>
+      <div className="loader-text">Scanning…</div>
+    </div>
+
+  </div>
+
+  
+  <div className="right-panel">
+
+    <div className="rp-header">
+      <div className="rp-eyebrow">Live Results</div>
+      <div className="rp-title">ANALYSIS<br />OUTPUT</div>
+    </div>
+
+    
+    <div className="idle-state" id="idleState">
+      <div className="idle-shield">
+        <svg width="72" height="84" viewBox="0 0 80 92" fill="none">
+          <path d="M40 4 L76 18 L76 46 C76 68 56 82 40 88 C24 82 4 68 4 46 L4 18 Z" stroke="rgba(207,175,90,0.5)" stroke-width="1.5" fill="none"/ />
+          <path d="M28 46 L36 54 L54 36" stroke="rgba(207,175,90,0.5)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/ />
+        </svg>
+      </div>
+      <div className="idle-text">Paste a job description<br />and hit Analyze</div>
+    </div>
+
+    
+    <div className="result-state" id="resultState">
+
+      <div className="verdict" id="verdictBanner">
+        <div className="verdict-icon" id="verdictIcon"></div>
+        <div>
+          <div className="verdict-label" id="verdictLabel"></div>
+          <div className="verdict-text" id="verdictText"></div>
+        </div>
+      </div>
+
+      <div className="score-section">
+        <div className="score-ring-wrap">
+          <svg className="score-ring-svg" viewBox="0 0 84 84">
+            <circle className="score-ring-bg" cx="42" cy="42" r="34"/ />
+            <circle className="score-ring-fill" id="scoreRing" cx="42" cy="42" r="34"/ />
+          </svg>
+          <div className="score-center">
+            <div className="score-num" id="scoreNum">--</div>
+            <div className="score-denom">/100</div>
+          </div>
+        </div>
+        <div className="score-info">
+          <div className="score-label">Trust Score</div>
+          <div className="score-msg" id="scoreMsg">--</div>
+        </div>
+      </div>
+
+      <div className="risk-section">
+        <div className="risk-label-row">
+          <div className="risk-label">Fraud Probability</div>
+          <div className="risk-pct" id="riskPct">--%</div>
+        </div>
+        <div className="risk-track">
+          <div className="risk-bar-fill" id="riskFill"></div>
+        </div>
+      </div>
+
+      <div className="email-row">
+        <div className="email-label">Email Check</div>
+        <div className="email-val" id="emailVal">--</div>
+      </div>
+
+      <div className="flags-section">
+        <div className="flags-title">Red Flags Detected</div>
+        <div id="flagsList"></div>
+      </div>
+
+      <div className="chart-section">
+        <div className="chart-title">Session Analytics</div>
+        <canvas id="fraudChart" height="150"></canvas>
+        <div className="stat-row">
+          <div className="stat-box">
+            <div className="stat-box-num" id="totalJobs">0</div>
+            <div className="stat-box-label">Total Scanned</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-box-num" id="fakeJobs">0</div>
+            <div className="stat-box-label">Fake Detected</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-box-num" id="realJobs">0</div>
+            <div className="stat-box-label">Safe Found</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<div className="app-footer">
+  <div className="footer-brand"><span className="ndot"></span>JOBSHIELD</div>
+  <div className="footer-credit">Aryan · Manthan · Dhairya</div>
+</div>
+
