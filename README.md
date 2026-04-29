@@ -372,9 +372,10 @@ This project is open source and available under the [MIT License](LICENSE).
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 - [Jina AI Reader](https://jina.ai/reader/) — URL content extraction
 
+  PPT LINK - https://docs.google.com/presentation/d/1T1tLBFNeaQOLA-PVKQMcmmlbiaqZqjY7/edit?usp=sharing&ouid=104224097209013718232&rtpof=true&sd=true
+
 ---
 
 <p align="center">
   <b>Built with ❤️ to protect job seekers from employment fraud</b>
-  PPT LINK - https://docs.google.com/presentation/d/1T1tLBFNeaQOLA-PVKQMcmmlbiaqZqjY7/edit?usp=sharing&ouid=104224097209013718232&rtpof=true&sd=true
 </p>
