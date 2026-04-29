@@ -784,60 +784,34 @@ function App() {
                     </motion.div>
                   </div>
 
-                  {/* ===== DETAILED SUMMARY & RED FLAGS ===== */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-black text-on-surface dark:text-white flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary">article</span>Detailed Summary
-                        </h3>
-                        {result.analysis?.source === 'gemini' && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full">
-                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none">
-                              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#gemini-grad)" />
-                              <defs><linearGradient id="gemini-grad" x1="2" y1="2" x2="22" y2="22"><stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/></linearGradient></defs>
-                            </svg>
-                            <span className="text-[9px] font-black uppercase tracking-widest bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Gemini AI</span>
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-on-surface-variant dark:text-slate-300 leading-relaxed">{result.analysis?.summary}</p>
-                      {result.analysis?.company_insight && (
-                        <div className="mt-4 p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10">
-                          <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Company Insight</h4>
-                          <p className="text-sm dark:text-slate-400 font-medium">{result.analysis.company_insight}</p>
-                        </div>
+                  {/* ===== DETAILED SUMMARY ===== */}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800 relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-black text-on-surface dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">article</span>Detailed Summary
+                      </h3>
+                      {result.analysis?.source === 'gemini' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full">
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none">
+                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#gemini-grad)" />
+                            <defs><linearGradient id="gemini-grad" x1="2" y1="2" x2="22" y2="22"><stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/></linearGradient></defs>
+                          </svg>
+                          <span className="text-[9px] font-black uppercase tracking-widest bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Gemini AI</span>
+                        </span>
                       )}
-                      <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl">
-                        <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Recommendation</h4>
-                        <p className="text-sm dark:text-slate-400 font-bold">{result.analysis?.recommendation}</p>
+                    </div>
+                    <p className="text-sm text-on-surface-variant dark:text-slate-300 leading-relaxed">{result.analysis?.summary}</p>
+                    {result.analysis?.company_insight && (
+                      <div className="mt-4 p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10">
+                        <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Company Insight</h4>
+                        <p className="text-sm dark:text-slate-400 font-medium">{result.analysis.company_insight}</p>
                       </div>
-                    </motion.div>
-
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
-                      <h3 className="text-lg font-black text-on-surface dark:text-white mb-4 uppercase tracking-widest">{result.prediction === 'Fake' ? 'Red Flags' : 'Positive Indicators'}</h3>
-                      <div className="flex flex-col gap-3 mb-6">
-                        {result.analysis?.red_flags && result.analysis.red_flags.length > 0 ? (
-                          result.analysis.red_flags.map((flag, i) => (
-                            <div key={i} className="flex gap-3 items-start bg-red-500/5 p-3 rounded-xl border border-red-500/10">
-                              <span className="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
-                              <p className="text-xs font-bold text-red-700 dark:text-red-400">{flag}</p>
-                            </div>
-                          ))
-                        ) : (
-                           <p className="text-sm dark:text-slate-400 italic">No suspicious metadata patterns detected.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Linguistic Hotspots</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {result.highlights && result.highlights.map((word, i) => (
-                            <span key={i} className="px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter bg-primary/10 text-primary rounded-lg border border-primary/20">{word}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
+                    )}
+                    <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl">
+                      <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-2">Recommendation</h4>
+                      <p className="text-sm dark:text-slate-400 font-bold">{result.analysis?.recommendation}</p>
+                    </div>
+                  </motion.div>
 
                   {/* ===== EXTRACTED TEXT ===== */}
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-surface-container-lowest dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-200/20 dark:border-slate-800">
